@@ -14,6 +14,15 @@ class Settings(BaseSettings):
     # Webpay Plus return URL — Transbank POSTs here after payment.
     webpay_return_url: str = "http://localhost:8000/api/checkout/webpay/return"
 
+    # --- Webpay credentials ---
+    # 'test' = sandbox público de Transbank (default seguro para dev).
+    # 'live' = producción con commerce code y api key reales.
+    webpay_environment: str = "test"
+    # Solo se usan cuando webpay_environment='live'. En 'test' se ignoran y
+    # el SDK usa las credenciales de integración bundled.
+    webpay_commerce_code: str = ""
+    webpay_api_key: str = ""
+
     # Shipping costs (CLP).
     shipping_rm_clp: int = 3500
     shipping_regiones_clp: int = 5500
