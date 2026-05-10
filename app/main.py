@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .api import checkout as checkout_api
+from .api import horeca as horeca_api
 from .api import newsletter as newsletter_api
 from .api import orders as orders_api
 from .api import products as products_api
@@ -44,6 +45,7 @@ app.include_router(products_api.router)
 app.include_router(newsletter_api.router)
 app.include_router(orders_api.router)
 app.include_router(checkout_api.router)
+app.include_router(horeca_api.router)
 app.include_router(admin_router)
 
 # Serve uploaded product images at /uploads/<filename>

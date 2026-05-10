@@ -138,3 +138,23 @@ class AdminLoginToken(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
+
+
+class HorecaLead(Base):
+    __tablename__ = "horeca_leads"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company: Mapped[str] = mapped_column(String(200))
+    contact_name: Mapped[str] = mapped_column(String(200))
+    email: Mapped[str] = mapped_column(String(200), index=True)
+    phone: Mapped[str] = mapped_column(String(40))
+    city: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    business_type: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    kg_per_month: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    machine_type: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    contacted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
