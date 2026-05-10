@@ -9,6 +9,7 @@ from .api import horeca as horeca_api
 from .api import newsletter as newsletter_api
 from .api import orders as orders_api
 from .api import products as products_api
+from .api import subscriptions as subscriptions_api
 from .api.admin import router as admin_router
 from .config import settings
 from .db import Base, SessionLocal, engine
@@ -46,6 +47,7 @@ app.include_router(newsletter_api.router)
 app.include_router(orders_api.router)
 app.include_router(checkout_api.router)
 app.include_router(horeca_api.router)
+app.include_router(subscriptions_api.router)
 app.include_router(admin_router)
 
 # Serve uploaded product images at /uploads/<filename>

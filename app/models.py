@@ -145,6 +145,55 @@ class AdminLoginToken(Base):
     )
 
 
+class CoffeeSubscription(Base):
+    """Suscripción recurrente de café.
+
+    'Light': el primer pago va por Webpay/Khipu igual que un pedido normal.
+    Las reposiciones futuras las gatilla un admin desde /admin (o un cron
+    futuro) y crean una nueva Order linkeada.
+    """
+    __tablename__ = "coffee_subscriptions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # Customer
+    customer_email: Mapped[str] = mapped_column(String(200), index=True)
+    customer_name: Mapped[str] = mapped_column(String(200))
+    customer_phone: Mapped[str] = mapped_column(String(40))
+    customer_rut: Mapped[str] = mapped_column(String(20))
+
+    # Shipping
+    shipping_method: Mapped[str] = mapped_column(String(20))
+    shipping_address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    shipping_comuna: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    shipping_region: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    shipping_notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Plan
+    frequency_days: Mapped[int] = mapped_column(Integer)  # 30, 60, 90
+    product_slug: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    size_g: Mapped[int] = mapped_column(Integer)
+    is_surprise: Mapped[bool] = mapped_column(Boolean, default=False)
+    discount_pct: Mapped[int] = mapped_column(Integer, default=10)
+
+    # State
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    last_charge_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    next_charge_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    canceled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    # Stats
+    orders_count: Mapped[int] = mapped_column(Integer, default=0)
+    first_order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), nullable=True)
+
+    admin_notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+
 class HorecaLead(Base):
     __tablename__ = "horeca_leads"
 

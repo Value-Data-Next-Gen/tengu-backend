@@ -103,6 +103,48 @@ class CheckoutInitIn(BaseModel):
     order_id: int
 
 
+# --- Suscripciones ---
+
+
+class SubscriptionIn(BaseModel):
+    customer_email: EmailStr
+    customer_name: str = Field(min_length=2, max_length=200)
+    customer_phone: str = Field(min_length=6, max_length=40)
+    customer_rut: str = Field(min_length=8, max_length=20)
+    shipping_method: Literal["rm", "regiones", "pickup"]
+    shipping_address: str | None = None
+    shipping_comuna: str | None = None
+    shipping_region: str | None = None
+    shipping_notes: str | None = None
+    frequency_days: Literal[30, 60, 90]
+    product_slug: str | None = None  # None si is_surprise=True
+    size_g: int = Field(gt=0)
+    is_surprise: bool = False
+
+
+class SubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    customer_email: str
+    customer_name: str
+    frequency_days: int
+    product_slug: str | None
+    size_g: int
+    is_surprise: bool
+    discount_pct: int
+    is_active: bool
+    next_charge_at: datetime | None
+    last_charge_at: datetime | None
+    orders_count: int
+    first_order_id: int | None
+    created_at: datetime
+
+
+class SubscriptionCreateOut(BaseModel):
+    subscription: SubscriptionOut
+    order: OrderOut
+
+
 class WebpayInitOut(BaseModel):
     token: str
     url: str
