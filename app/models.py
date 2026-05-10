@@ -40,6 +40,22 @@ class Product(Base):
     )
 
 
+class Category(Base):
+    """Categoría de producto. Si is_visible=False, todos los productos
+    de esa categoría se ocultan de la tienda pública sin tener que
+    despublicarlos uno por uno."""
+    __tablename__ = "categories"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    is_visible: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=100)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+
 class Variant(Base):
     __tablename__ = "variants"
 

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from .api import categories as categories_api
 from .api import checkout as checkout_api
 from .api import horeca as horeca_api
 from .api import newsletter as newsletter_api
@@ -51,6 +52,7 @@ def root():
 
 
 app.include_router(products_api.router)
+app.include_router(categories_api.router)
 app.include_router(newsletter_api.router)
 app.include_router(orders_api.router)
 app.include_router(checkout_api.router)

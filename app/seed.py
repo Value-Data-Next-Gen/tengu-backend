@@ -4,7 +4,7 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from .models import Product, Variant
+from .models import Category, Product, Variant
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -32,6 +32,14 @@ def seed_products(db: Session) -> int:
         return 0
 
     data = json.loads(SEED_PATH.read_text(encoding="utf-8"))
+    # Auto-crear categorías visibles a partir de los productos del seed
+    seen_cats: set[str] = set()
+    for entry in data:
+        if entry["category"] not in seen_cats:
+            if not db.query(Category).filter(Category.name == entry["category"]).first():
+                db.add(Category(name=entry["category"], is_visible=True))
+            seen_cats.add(entry["category"])
+    db.flush()
     for entry in data:
         variants = [
             Variant(

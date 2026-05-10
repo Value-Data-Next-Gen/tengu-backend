@@ -182,6 +182,36 @@ class ReviewSummary(BaseModel):
     average: float
 
 
+# --- Categorías ---
+
+
+class CategoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    name: str
+    description: str | None
+    is_visible: bool
+    sort_order: int
+
+
+class CategoryWithCount(CategoryOut):
+    product_count: int = 0
+
+
+class CategoryIn(BaseModel):
+    name: str = Field(min_length=2, max_length=80)
+    description: str | None = Field(default=None, max_length=500)
+    is_visible: bool = True
+    sort_order: int = 100
+
+
+class CategoryPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=80)
+    description: str | None = None
+    is_visible: bool | None = None
+    sort_order: int | None = None
+
+
 # --- Admin: CRUD productos ---
 
 
