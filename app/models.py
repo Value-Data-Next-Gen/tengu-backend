@@ -42,6 +42,7 @@ class Variant(Base):
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
     size_g: Mapped[int] = mapped_column(Integer)
     price_clp: Mapped[int] = mapped_column(Integer)
+    stock_qty: Mapped[int] = mapped_column(Integer, default=50)
 
     product: Mapped[Product] = relationship(back_populates="variants")
 
@@ -59,6 +60,8 @@ class Subscription(Base):
 class OrderStatus(str, Enum):
     pending = "pending"
     paid = "paid"
+    shipped = "shipped"
+    delivered = "delivered"
     failed = "failed"
     canceled = "canceled"
 
@@ -75,13 +78,11 @@ class Order(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     status: Mapped[str] = mapped_column(String(20), default=OrderStatus.pending.value, index=True)
 
-    # Customer
     customer_email: Mapped[str] = mapped_column(String(200), index=True)
     customer_name: Mapped[str] = mapped_column(String(200))
     customer_phone: Mapped[str] = mapped_column(String(40))
     customer_rut: Mapped[str] = mapped_column(String(20))
 
-    # Shipping
     shipping_method: Mapped[str] = mapped_column(String(20))
     shipping_address: Mapped[str | None] = mapped_column(String(300), nullable=True)
     shipping_comuna: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -89,20 +90,22 @@ class Order(Base):
     shipping_notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
     shipping_cost_clp: Mapped[int] = mapped_column(Integer, default=0)
 
-    # Money (CLP, integer)
     subtotal_clp: Mapped[int] = mapped_column(Integer)
     total_clp: Mapped[int] = mapped_column(Integer)
 
-    # Webpay
     webpay_buy_order: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     webpay_token: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     webpay_authorization_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
     webpay_response: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    admin_notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    tracking_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    shipped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
@@ -122,3 +125,16 @@ class OrderItem(Base):
     subtotal_clp: Mapped[int] = mapped_column(Integer)
 
     order: Mapped[Order] = relationship(back_populates="items")
+
+
+class AdminLoginToken(Base):
+    __tablename__ = "admin_login_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), index=True)
+    token: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )

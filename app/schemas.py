@@ -87,8 +87,11 @@ class OrderOut(BaseModel):
     subtotal_clp: int
     total_clp: int
     webpay_authorization_code: str | None
+    admin_notes: str | None
+    tracking_code: str | None
     created_at: datetime
     paid_at: datetime | None
+    shipped_at: datetime | None
     items: list[OrderItemOut]
 
 

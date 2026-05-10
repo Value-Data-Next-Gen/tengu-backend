@@ -11,6 +11,7 @@ venv/
 # Local data
 data/*.db
 data/*.db-journal
+uploads/
 .env
 .env.local
 
