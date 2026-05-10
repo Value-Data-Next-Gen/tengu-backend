@@ -145,6 +145,41 @@ class SubscriptionCreateOut(BaseModel):
     order: OrderOut
 
 
+# --- Reseñas ---
+
+
+class ReviewIn(BaseModel):
+    product_slug: str
+    customer_name: str = Field(min_length=2, max_length=120)
+    customer_email: EmailStr
+    rating: int = Field(ge=1, le=5)
+    title: str | None = Field(default=None, max_length=200)
+    body: str = Field(min_length=10, max_length=2000)
+
+
+class ReviewOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    product_slug: str
+    customer_name: str
+    rating: int
+    title: str | None
+    body: str
+    created_at: datetime
+
+
+class ReviewAdminOut(ReviewOut):
+    customer_email: str
+    status: str
+    admin_notes: str | None
+    approved_at: datetime | None
+
+
+class ReviewSummary(BaseModel):
+    count: int
+    average: float
+
+
 class WebpayInitOut(BaseModel):
     token: str
     url: str

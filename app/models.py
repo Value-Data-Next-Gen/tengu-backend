@@ -194,6 +194,28 @@ class CoffeeSubscription(Base):
     )
 
 
+class Review(Base):
+    __tablename__ = "reviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_slug: Mapped[str] = mapped_column(String(120), index=True)
+    customer_name: Mapped[str] = mapped_column(String(120))
+    customer_email: Mapped[str] = mapped_column(String(200), index=True)
+    rating: Mapped[int] = mapped_column(Integer)  # 1-5
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    body: Mapped[str] = mapped_column(String(2000))
+    # Moderación: pending hasta que admin lo apruebe.
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    # 'pending' | 'approved' | 'rejected'
+    admin_notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Link opcional a una orden real (si el reviewer compró)
+    order_id: Mapped[int | None] = mapped_column(ForeignKey("orders.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class HorecaLead(Base):
     __tablename__ = "horeca_leads"
 
