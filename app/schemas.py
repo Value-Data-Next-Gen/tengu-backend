@@ -32,6 +32,8 @@ class ProductOut(BaseModel):
     image: str | None
     category: str
     featured: bool
+    is_published: bool
+    description: str | None = None
     variants: list[VariantOut]
 
 
@@ -192,19 +194,23 @@ class VariantIn(BaseModel):
 class ProductIn(BaseModel):
     slug: str = Field(min_length=2, max_length=120, pattern=r"^[a-z0-9-]+$")
     name: str = Field(min_length=2, max_length=200)
+    # Para no-café (mug, equipo) puede ser una marca o país. Required para evitar ambigüedad.
     origin: str = Field(min_length=2, max_length=60)
     region: str | None = Field(default=None, max_length=200)
     variety: str | None = Field(default=None, max_length=120)
     process: str | None = Field(default=None, max_length=80)
     altitude_masl: str | None = Field(default=None, max_length=40)
     harvest: str | None = Field(default=None, max_length=60)
-    roast_profile: str = Field(min_length=2, max_length=40)
+    # Para café: 'Filtrado' o 'Espresso'. Para no-café: vacío o 'N/A'.
+    roast_profile: str = Field(default="", max_length=40)
     producer: str | None = Field(default=None, max_length=200)
     body: str | None = Field(default=None, max_length=120)
     acidity: str | None = Field(default=None, max_length=120)
     tasting_notes: list[str] = Field(default_factory=list)
     category: str = Field(min_length=2, max_length=40)
     featured: bool = False
+    is_published: bool = True
+    description: str | None = Field(default=None, max_length=2000)
     variants: list[VariantIn] = Field(min_length=1)
 
 
@@ -223,6 +229,8 @@ class ProductPatch(BaseModel):
     tasting_notes: list[str] | None = None
     category: str | None = None
     featured: bool | None = None
+    is_published: bool | None = None
+    description: str | None = None
 
 
 class WebpayInitOut(BaseModel):

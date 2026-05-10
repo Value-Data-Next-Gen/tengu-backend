@@ -19,7 +19,8 @@ class Product(Base):
     process: Mapped[str | None] = mapped_column(String(80), nullable=True)
     altitude_masl: Mapped[str | None] = mapped_column(String(40), nullable=True)
     harvest: Mapped[str | None] = mapped_column(String(60), nullable=True)
-    roast_profile: Mapped[str] = mapped_column(String(40))
+    # Para no-café (mug, equipo), puede ser vacío o "N/A". Para café usar Filtrado / Espresso.
+    roast_profile: Mapped[str] = mapped_column(String(40), default="")
     producer: Mapped[str | None] = mapped_column(String(200), nullable=True)
     body: Mapped[str | None] = mapped_column(String(120), nullable=True)
     acidity: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -27,6 +28,10 @@ class Product(Base):
     image: Mapped[str | None] = mapped_column(String(200), nullable=True)
     category: Mapped[str] = mapped_column(String(40), index=True)
     featured: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Si is_published=False, no aparece en /api/products (público) pero sí en /api/admin/products
+    is_published: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    # Descripción opcional para productos no-café (mugs, equipo, etc.)
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
 
     variants: Mapped[list["Variant"]] = relationship(
         back_populates="product",
