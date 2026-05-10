@@ -15,13 +15,16 @@ class Settings(BaseSettings):
     webpay_return_url: str = "http://localhost:8000/api/checkout/webpay/return"
 
     # --- Webpay credentials ---
-    # 'test' = sandbox público de Transbank (default seguro para dev).
-    # 'live' = producción con commerce code y api key reales.
     webpay_environment: str = "test"
-    # Solo se usan cuando webpay_environment='live'. En 'test' se ignoran y
-    # el SDK usa las credenciales de integración bundled.
     webpay_commerce_code: str = ""
     webpay_api_key: str = ""
+
+    # --- Khipu credentials ---
+    # Configurar tras crear cuenta en https://khipu.com (registro gratuito).
+    # En el panel "Cobrar > Tu información" obtienes receiver_id + secret/api key.
+    khipu_receiver_id: str = ""
+    khipu_api_key: str = ""
+    khipu_api_base: str = "https://payment-api.khipu.com/v3"
 
     # Shipping costs (CLP).
     shipping_rm_clp: int = 3500

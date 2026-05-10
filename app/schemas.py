@@ -86,6 +86,7 @@ class OrderOut(BaseModel):
     shipping_cost_clp: int
     subtotal_clp: int
     total_clp: int
+    payment_method: str | None
     webpay_authorization_code: str | None
     admin_notes: str | None
     tracking_code: str | None
@@ -98,10 +99,16 @@ class OrderOut(BaseModel):
 # --- Checkout ---
 
 
-class WebpayInitIn(BaseModel):
+class CheckoutInitIn(BaseModel):
     order_id: int
 
 
 class WebpayInitOut(BaseModel):
     token: str
     url: str
+
+
+class KhipuInitOut(BaseModel):
+    payment_id: str
+    payment_url: str
+    simplified_transfer_url: str | None = None

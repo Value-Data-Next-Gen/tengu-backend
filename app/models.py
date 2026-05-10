@@ -93,10 +93,15 @@ class Order(Base):
     subtotal_clp: Mapped[int] = mapped_column(Integer)
     total_clp: Mapped[int] = mapped_column(Integer)
 
+    payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+
     webpay_buy_order: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     webpay_token: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     webpay_authorization_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
     webpay_response: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    khipu_payment_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    khipu_response: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     admin_notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     tracking_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
