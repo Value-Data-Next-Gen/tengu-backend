@@ -180,6 +180,51 @@ class ReviewSummary(BaseModel):
     average: float
 
 
+# --- Admin: CRUD productos ---
+
+
+class VariantIn(BaseModel):
+    size_g: int = Field(gt=0)
+    price_clp: int = Field(ge=0)
+    stock_qty: int = Field(ge=0, default=50)
+
+
+class ProductIn(BaseModel):
+    slug: str = Field(min_length=2, max_length=120, pattern=r"^[a-z0-9-]+$")
+    name: str = Field(min_length=2, max_length=200)
+    origin: str = Field(min_length=2, max_length=60)
+    region: str | None = Field(default=None, max_length=200)
+    variety: str | None = Field(default=None, max_length=120)
+    process: str | None = Field(default=None, max_length=80)
+    altitude_masl: str | None = Field(default=None, max_length=40)
+    harvest: str | None = Field(default=None, max_length=60)
+    roast_profile: str = Field(min_length=2, max_length=40)
+    producer: str | None = Field(default=None, max_length=200)
+    body: str | None = Field(default=None, max_length=120)
+    acidity: str | None = Field(default=None, max_length=120)
+    tasting_notes: list[str] = Field(default_factory=list)
+    category: str = Field(min_length=2, max_length=40)
+    featured: bool = False
+    variants: list[VariantIn] = Field(min_length=1)
+
+
+class ProductPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=200)
+    origin: str | None = Field(default=None, min_length=2, max_length=60)
+    region: str | None = None
+    variety: str | None = None
+    process: str | None = None
+    altitude_masl: str | None = None
+    harvest: str | None = None
+    roast_profile: str | None = None
+    producer: str | None = None
+    body: str | None = None
+    acidity: str | None = None
+    tasting_notes: list[str] | None = None
+    category: str | None = None
+    featured: bool | None = None
+
+
 class WebpayInitOut(BaseModel):
     token: str
     url: str
