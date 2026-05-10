@@ -21,9 +21,12 @@ class Settings(BaseSettings):
 
     # --- Admin & auth ---
     admin_emails: str = "g.rojaschacon@gmail.com"
+    # Password compartido para los admins listados en admin_emails.
+    # IMPORTANTE: cambiar en producción vía env var.
+    admin_password: str = "tengu123"
     jwt_secret: str = secrets.token_urlsafe(32)  # override in .env for stable sessions
     jwt_algorithm: str = "HS256"
-    magic_link_ttl_minutes: int = 15
+    magic_link_ttl_minutes: int = 15  # legacy, no usado en password auth
     session_ttl_hours: int = 72
 
     # --- Email (SMTP) ---
