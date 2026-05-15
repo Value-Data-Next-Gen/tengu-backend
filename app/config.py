@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/tengu.db"
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     seed_on_startup: bool = True
+    # En Azure App Service apuntar a /home/uploads para que persista entre deploys
+    # (en dev queda relativo a backend/, gitignored).
+    uploads_dir: str = ""
 
     # Frontend URL — backend redirects here after Webpay return + magic link.
     frontend_url: str = "http://localhost:5173"

@@ -4,13 +4,14 @@ from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from .config import settings
 from .models import Category, Product, Variant
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SEED_PATH = BACKEND_ROOT / "seed" / "products.json"
 SEED_IMAGES = BACKEND_ROOT / "seed" / "images"
-UPLOADS_DIR = BACKEND_ROOT / "uploads"
+UPLOADS_DIR = Path(settings.uploads_dir) if settings.uploads_dir else BACKEND_ROOT / "uploads"
 
 
 def ensure_uploads_seeded() -> None:

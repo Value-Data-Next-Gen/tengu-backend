@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .api import categories as categories_api
@@ -37,6 +38,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Tengu Roastery API", version="0.3.0", lifespan=lifespan)
 
+app.add_middleware(GZipMiddleware, minimum_size=512)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -44,6 +46,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Cache agresivo en /uploads para que Netlify cachee al edge. El admin UI ya
+# agrega ?v=timestamp al re-subir, así que el cliente forzar refresh cuando
+# importa; el público lo ve estable durante 1 día.
+class CachedStaticFiles(StaticFiles):
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
 
 
 @app.get("/")
@@ -62,4 +75,4 @@ app.include_router(reviews_api.router)
 app.include_router(admin_router)
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+app.mount("/uploads", CachedStaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
