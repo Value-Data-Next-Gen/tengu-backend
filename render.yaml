@@ -1,0 +1,66 @@
+# Render Blueprint — vdng / tengu-backend
+#
+# Deploy: en Render, New > Blueprint > conectar este repo. Render lee este
+# archivo y crea el servicio + disco persistente.
+#
+# SQLite vive en /var/data/tengu.db (disco persistente). El plan Starter es
+# el mínimo que soporta discos — en Free el disco se descarta y SQLite se
+# pierde en cada redeploy/cold start.
+services:
+  - type: web
+    name: tengu-backend
+    runtime: python
+    region: oregon
+    plan: starter
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        value: sqlite:////var/data/tengu.db
+      - key: SEED_ON_STARTUP
+        value: "true"
+      - key: CORS_ORIGINS
+        sync: false   # set manual: https://<tu-sitio>.netlify.app
+      - key: FRONTEND_URL
+        sync: false   # set manual: https://<tu-sitio>.netlify.app
+      - key: WEBPAY_RETURN_URL
+        sync: false   # set manual: https://tengu-backend.onrender.com/api/checkout/webpay/return
+      - key: WEBPAY_ENVIRONMENT
+        value: test
+      - key: WEBPAY_COMMERCE_CODE
+        sync: false
+      - key: WEBPAY_API_KEY
+        sync: false
+      - key: KHIPU_RECEIVER_ID
+        sync: false
+      - key: KHIPU_API_KEY
+        sync: false
+      - key: ADMIN_EMAILS
+        value: g.rojaschacon@gmail.com
+      - key: ADMIN_PASSWORD
+        sync: false   # CAMBIAR en producción
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_TTL_HOURS
+        value: "72"
+      - key: SMTP_HOST
+        value: __console__
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        value: Tengu Roastery <hola@tenguroastery.cl>
+      - key: SMTP_USE_TLS
+        value: "true"
+    disk:
+      name: tengu-data
+      mountPath: /var/data
+      sizeGB: 1

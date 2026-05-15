@@ -77,23 +77,22 @@ Para producción: cambiar `IntegrationType.TEST` → `IntegrationType.LIVE` y mo
 
 (Pendiente.)
 
-## Deploy
+## Deploy — Render con SQLite
 
-Recomendado: **Render** o **Railway**.
+El repo trae un [`render.yaml`](./render.yaml) listo. Pasos:
 
-```bash
-# Render: build command
-pip install -r requirements.txt
+1. En Render: **New > Blueprint** → conectar este repo (`Value-Data-Next-Gen/tengu-backend`).
+2. Render detecta el blueprint, crea el servicio `tengu-backend` y monta un disco persistente de 1 GB en `/var/data`.
+3. Setear en el dashboard (env vars marcadas como `sync: false`):
+   - `CORS_ORIGINS` = `https://<tu-sitio>.netlify.app`
+   - `FRONTEND_URL` = `https://<tu-sitio>.netlify.app`
+   - `WEBPAY_RETURN_URL` = `https://tengu-backend.onrender.com/api/checkout/webpay/return`
+   - `ADMIN_PASSWORD` = uno seguro, no el de dev
+   - (opcional) credenciales SMTP, Webpay live, Khipu.
 
-# Render: start command
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
+> **SQLite + Render**: la DB vive en `/var/data/tengu.db` sobre disco persistente. **Requiere plan Starter ($7/mo)** — el plan Free no soporta discos y SQLite se perdería en cada redeploy. Si quieres migrar a Postgres después, basta cambiar `DATABASE_URL` a `postgresql://…`.
 
-Variables de entorno en producción:
-- `DATABASE_URL=postgresql://...`
-- `CORS_ORIGINS=https://tenguroastery.cl`
-- `FRONTEND_URL=https://tenguroastery.cl`
-- `WEBPAY_RETURN_URL=https://api.tenguroastery.cl/api/checkout/webpay/return`
+> **Uploads de admin**: el directorio `backend/uploads/` no está en el disco persistente — las imágenes seed se restauran en cada deploy desde `backend/seed/images/`, pero las imágenes subidas por admin se pierden al redeployar. Para producción real, mover a S3/R2 o ampliar el mount del disco.
 
 ## License
 
