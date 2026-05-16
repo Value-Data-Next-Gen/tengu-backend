@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from .api import auth as auth_api
 from .api import categories as categories_api
 from .api import checkout as checkout_api
 from .api import horeca as horeca_api
@@ -72,6 +73,7 @@ app.include_router(checkout_api.router)
 app.include_router(horeca_api.router)
 app.include_router(subscriptions_api.router)
 app.include_router(reviews_api.router)
+app.include_router(auth_api.router)
 app.include_router(admin_router)
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

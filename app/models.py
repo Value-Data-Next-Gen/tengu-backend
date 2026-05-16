@@ -99,6 +99,10 @@ class Order(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     status: Mapped[str] = mapped_column(String(20), default=OrderStatus.pending.value, index=True)
 
+    # Asociación opcional con cuenta de cliente. Se hace upsert al crear la orden.
+    # Nullable porque hay órdenes legacy sin Customer.
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), nullable=True, index=True)
+
     customer_email: Mapped[str] = mapped_column(String(200), index=True)
     customer_name: Mapped[str] = mapped_column(String(200))
     customer_phone: Mapped[str] = mapped_column(String(40))
@@ -155,6 +159,48 @@ class OrderItem(Base):
 
 class AdminLoginToken(Base):
     __tablename__ = "admin_login_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), index=True)
+    token: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class Customer(Base):
+    """Cuenta de cliente (público). Se crea con upsert al confirmar una orden,
+    o explícitamente desde /api/auth/request-link. Login = magic link al email.
+    Todos los campos excepto email son opcionales (los completa el cliente)."""
+    __tablename__ = "customers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    rut: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    shipping_address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    shipping_comuna: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    shipping_region: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    shipping_notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Preferencias de café: {"grind": "grano|molido", "roast": "filtrado|espresso",
+    # "frequency_days": 30|60|90} — schema libre, el frontend lo valida.
+    coffee_prefs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class CustomerLoginToken(Base):
+    """Magic link de un solo uso para login de Customer. Mismo patrón que AdminLoginToken."""
+    __tablename__ = "customer_login_tokens"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(String(200), index=True)

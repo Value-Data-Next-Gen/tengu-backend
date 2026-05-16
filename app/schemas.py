@@ -266,6 +266,45 @@ class ProductPatch(BaseModel):
     description: str | None = None
 
 
+# --- Customer / Auth (público) ---
+
+
+class AuthRequestLinkIn(BaseModel):
+    email: EmailStr
+
+
+class AuthVerifyOut(BaseModel):
+    jwt: str
+    email: str
+
+
+class CustomerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    email: str
+    name: str | None
+    phone: str | None
+    rut: str | None
+    shipping_address: str | None
+    shipping_comuna: str | None
+    shipping_region: str | None
+    shipping_notes: str | None
+    coffee_prefs: dict | None
+    created_at: datetime
+
+
+class CustomerPatch(BaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    phone: str | None = Field(default=None, max_length=40)
+    rut: str | None = Field(default=None, max_length=20)
+    shipping_address: str | None = Field(default=None, max_length=300)
+    shipping_comuna: str | None = Field(default=None, max_length=120)
+    shipping_region: str | None = Field(default=None, max_length=120)
+    shipping_notes: str | None = Field(default=None, max_length=500)
+    coffee_prefs: dict | None = None
+
+
 class WebpayInitOut(BaseModel):
     token: str
     url: str

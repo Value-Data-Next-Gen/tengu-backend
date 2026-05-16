@@ -3,10 +3,39 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import Order, OrderItem, Product, ShippingMethod, Variant
+from ..models import Customer, Order, OrderItem, Product, ShippingMethod, Variant
 from ..schemas import OrderIn, OrderOut
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+
+def _upsert_customer(db: Session, payload: OrderIn) -> Customer:
+    """Crea o actualiza el Customer asociado al email del payload.
+    Llena los campos vacíos del Customer existente con los datos de la orden
+    (no pisa los que el cliente ya configuró manualmente)."""
+    email = payload.customer_email.lower().strip()
+    customer = db.query(Customer).filter(Customer.email == email).first()
+    if not customer:
+        customer = Customer(email=email)
+        db.add(customer)
+
+    # Solo llenamos lo que esté vacío en el Customer — preserva preferencias
+    # manuales que el cliente haya seteado desde /cuenta.
+    if not customer.name:
+        customer.name = payload.customer_name.strip()
+    if not customer.phone:
+        customer.phone = payload.customer_phone.strip()
+    if not customer.rut:
+        customer.rut = payload.customer_rut.strip()
+    if not customer.shipping_address and payload.shipping_address:
+        customer.shipping_address = payload.shipping_address
+    if not customer.shipping_comuna and payload.shipping_comuna:
+        customer.shipping_comuna = payload.shipping_comuna
+    if not customer.shipping_region and payload.shipping_region:
+        customer.shipping_region = payload.shipping_region
+
+    db.flush()
+    return customer
 
 
 def _shipping_cost(method: str) -> int:
@@ -51,7 +80,10 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
     shipping_cost = _shipping_cost(payload.shipping_method)
     total = subtotal + shipping_cost
 
+    customer = _upsert_customer(db, payload)
+
     order = Order(
+        customer_id=customer.id,
         customer_email=payload.customer_email.lower(),
         customer_name=payload.customer_name.strip(),
         customer_phone=payload.customer_phone.strip(),
