@@ -109,6 +109,8 @@ class Order(Base):
     customer_rut: Mapped[str] = mapped_column(String(20))
 
     shipping_method: Mapped[str] = mapped_column(String(20))
+    # Modalidad Blue Express cuando shipping_method != 'pickup'. 'domicilio' o 'punto'.
+    shipping_mode: Mapped[str | None] = mapped_column(String(20), nullable=True)
     shipping_address: Mapped[str | None] = mapped_column(String(300), nullable=True)
     shipping_comuna: Mapped[str | None] = mapped_column(String(120), nullable=True)
     shipping_region: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -281,6 +283,62 @@ class Review(Base):
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class SiteSettings(Base):
+    """Configuración site-wide editable desde /admin. Tabla singleton: siempre
+    una sola fila con id=1. Si no existe se crea con defaults al primer acceso."""
+    __tablename__ = "site_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Envíos
+    free_shipping_threshold_clp: Mapped[int] = mapped_column(Integer, default=50000)
+    # Operativa / copy
+    roast_day: Mapped[str] = mapped_column(String(40), default="viernes")
+    ship_days: Mapped[str] = mapped_column(String(80), default="martes y viernes")
+    # Suscripción
+    subscription_discount_pct: Mapped[int] = mapped_column(Integer, default=10)
+    # Wholesale / HORECA
+    wholesale_min_kg: Mapped[int] = mapped_column(Integer, default=5)
+    wholesale_lead_msg: Mapped[str] = mapped_column(
+        String(500),
+        default="Cotización mayorista personalizada desde 5 kg. Filtrado o espresso a tu medida.",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class ShippingRate(Base):
+    """Tarifa Blue Express por talla + zona + modalidad. Editable desde /admin.
+    Origen fijo: Rancagua. Talla derivada del peso total del pedido."""
+    __tablename__ = "shipping_rates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    size_band: Mapped[str] = mapped_column(String(4), index=True)  # XS, S, M, L
+    zone: Mapped[str] = mapped_column(String(20), index=True)  # ohiggins, centro_otros, extremo
+    mode: Mapped[str] = mapped_column(String(20), index=True)  # domicilio, punto
+    weight_min_g: Mapped[int] = mapped_column(Integer)  # inclusive
+    weight_max_g: Mapped[int] = mapped_column(Integer)  # inclusive
+    price_clp: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class ComunaZone(Base):
+    """Mapeo región / comuna → zona Blue Express desde Rancagua.
+    Si una comuna no está, cae al match por región. Si tampoco, usa 'extremo'."""
+    __tablename__ = "comuna_zones"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    region: Mapped[str] = mapped_column(String(120), index=True)
+    comuna: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    zone: Mapped[str] = mapped_column(String(20))  # ohiggins, centro_otros, extremo
 
 
 class HorecaLead(Base):

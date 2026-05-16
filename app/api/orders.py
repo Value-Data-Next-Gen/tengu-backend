@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..db import get_db
-from ..models import Customer, Order, OrderItem, Product, ShippingMethod, Variant
+from ..models import Customer, Order, OrderItem, Product, ShippingMethod
 from ..schemas import OrderIn, OrderOut
+from ..services.shipping import quote_shipping
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -38,14 +38,6 @@ def _upsert_customer(db: Session, payload: OrderIn) -> Customer:
     return customer
 
 
-def _shipping_cost(method: str) -> int:
-    return {
-        ShippingMethod.rm.value: settings.shipping_rm_clp,
-        ShippingMethod.regiones.value: settings.shipping_regiones_clp,
-        ShippingMethod.pickup.value: settings.shipping_pickup_clp,
-    }[method]
-
-
 @router.post("", response_model=OrderOut, status_code=201)
 def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
     if payload.shipping_method != ShippingMethod.pickup.value:
@@ -77,7 +69,22 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
             )
         )
 
-    shipping_cost = _shipping_cost(payload.shipping_method)
+    # Cálculo de envío: pickup gratis; resto vía quote dinámico (Blue Express).
+    # El frontend ya cotizó y mostró el total; recomputamos server-side para
+    # que el cliente no pueda manipular el precio manualmente.
+    if payload.shipping_method == ShippingMethod.pickup.value:
+        shipping_cost = 0
+    else:
+        weight_g = sum(line.size_g * line.quantity for line in payload.items)
+        quote = quote_shipping(
+            db,
+            region=payload.shipping_region or "",
+            comuna=payload.shipping_comuna,
+            weight_g=weight_g,
+            mode=payload.shipping_mode or "domicilio",
+            subtotal_clp=subtotal,
+        )
+        shipping_cost = quote["cost_clp"]
     total = subtotal + shipping_cost
 
     customer = _upsert_customer(db, payload)
@@ -89,6 +96,11 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
         customer_phone=payload.customer_phone.strip(),
         customer_rut=payload.customer_rut.strip(),
         shipping_method=payload.shipping_method,
+        shipping_mode=(
+            payload.shipping_mode
+            if payload.shipping_method != ShippingMethod.pickup.value
+            else None
+        ),
         shipping_address=payload.shipping_address,
         shipping_comuna=payload.shipping_comuna,
         shipping_region=payload.shipping_region,

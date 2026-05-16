@@ -16,11 +16,13 @@ from .api import newsletter as newsletter_api
 from .api import orders as orders_api
 from .api import products as products_api
 from .api import reviews as reviews_api
+from .api import site as site_api
 from .api import subscriptions as subscriptions_api
 from .api.admin import router as admin_router
 from .config import settings
 from .db import Base, SessionLocal, engine
 from .seed import UPLOADS_DIR, ensure_uploads_seeded, seed_products
+from .services.shipping import ensure_seeded as ensure_shipping_seeded
 from .services.subscriptions_cron import subscription_cron_loop
 
 
@@ -38,6 +40,8 @@ def _migrate_add_missing_columns() -> None:
         statements.append(
             "CREATE INDEX IF NOT EXISTS ix_orders_customer_id ON orders(customer_id)"
         )
+    if "shipping_mode" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN shipping_mode VARCHAR(20)")
     if not statements:
         return
     with engine.begin() as conn:
@@ -53,6 +57,7 @@ async def lifespan(_: FastAPI):
     if settings.seed_on_startup:
         with SessionLocal() as db:
             seed_products(db)
+            ensure_shipping_seeded(db)
     # Arranca el cron de suscripciones (no bloquea el startup)
     cron_task = asyncio.create_task(subscription_cron_loop())
     try:
@@ -98,6 +103,8 @@ app.include_router(horeca_api.router)
 app.include_router(subscriptions_api.router)
 app.include_router(reviews_api.router)
 app.include_router(auth_api.router)
+app.include_router(site_api.router)
+app.include_router(site_api.shipping_router)
 app.include_router(admin_router)
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

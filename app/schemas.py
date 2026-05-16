@@ -52,6 +52,8 @@ class OrderIn(BaseModel):
     customer_phone: str = Field(min_length=6, max_length=40)
     customer_rut: str = Field(min_length=8, max_length=20)
     shipping_method: Literal["rm", "regiones", "pickup"]
+    # 'domicilio' o 'punto' Blue Express. Solo cuando shipping_method != 'pickup'.
+    shipping_mode: Literal["domicilio", "punto"] | None = None
     shipping_address: str | None = None
     shipping_comuna: str | None = None
     shipping_region: str | None = None
@@ -307,6 +309,75 @@ class CustomerPatch(BaseModel):
     shipping_region: str | None = Field(default=None, max_length=120)
     shipping_notes: str | None = Field(default=None, max_length=500)
     coffee_prefs: dict | None = None
+
+
+# --- Site settings + shipping (admin-config) ---
+
+
+class SiteSettingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    free_shipping_threshold_clp: int
+    roast_day: str
+    ship_days: str
+    subscription_discount_pct: int
+    wholesale_min_kg: int
+    wholesale_lead_msg: str
+
+
+class SiteSettingsPatch(BaseModel):
+    free_shipping_threshold_clp: int | None = Field(default=None, ge=0)
+    roast_day: str | None = Field(default=None, max_length=40)
+    ship_days: str | None = Field(default=None, max_length=80)
+    subscription_discount_pct: int | None = Field(default=None, ge=0, le=100)
+    wholesale_min_kg: int | None = Field(default=None, ge=1)
+    wholesale_lead_msg: str | None = Field(default=None, max_length=500)
+
+
+class ShippingRateOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    size_band: str
+    zone: str
+    mode: str
+    weight_min_g: int
+    weight_max_g: int
+    price_clp: int
+
+
+class ShippingRatePatch(BaseModel):
+    price_clp: int = Field(ge=0)
+
+
+class ShippingQuoteIn(BaseModel):
+    region: str
+    comuna: str | None = None
+    weight_g: int = Field(ge=0)
+    mode: Literal["domicilio", "punto"] = "domicilio"
+    subtotal_clp: int = Field(ge=0)
+
+
+class ShippingQuoteOut(BaseModel):
+    cost_clp: int
+    zone: str
+    size_band: str
+    is_free: bool
+    reason: str  # explain: por qué este precio (free / banda / zona)
+
+
+class ComunaZoneOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    region: str
+    comuna: str | None
+    zone: str
+
+
+class ComunaZoneIn(BaseModel):
+    region: str = Field(min_length=2, max_length=120)
+    comuna: str | None = Field(default=None, max_length=120)
+    zone: Literal["ohiggins", "centro_otros", "extremo"]
 
 
 class WebpayInitOut(BaseModel):
