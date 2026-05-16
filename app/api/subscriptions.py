@@ -4,20 +4,26 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..db import get_db
 from ..models import CoffeeSubscription, Order, OrderItem, Product, ShippingMethod
 from ..schemas import SubscriptionCreateOut, SubscriptionIn, SubscriptionOut
+from ..services.shipping import get_settings, quote_shipping
 
 router = APIRouter(prefix="/api/subscriptions", tags=["subscriptions"])
 
 
-def _shipping_cost(method: str) -> int:
-    return {
-        ShippingMethod.rm.value: settings.shipping_rm_clp,
-        ShippingMethod.regiones.value: settings.shipping_regiones_clp,
-        ShippingMethod.pickup.value: settings.shipping_pickup_clp,
-    }[method]
+def _shipping_cost_for_sub(db: Session, sub: CoffeeSubscription, subtotal_clp: int) -> int:
+    if sub.shipping_method == ShippingMethod.pickup.value:
+        return 0
+    q = quote_shipping(
+        db,
+        region=sub.shipping_region or "",
+        comuna=sub.shipping_comuna,
+        weight_g=sub.size_g,
+        mode="domicilio",  # suscripciones por ahora siempre a domicilio
+        subtotal_clp=subtotal_clp,
+    )
+    return q["cost_clp"]
 
 
 def _pick_surprise_product(db: Session) -> Product:
@@ -48,7 +54,7 @@ def _build_order_from_sub(
 
     unit_price_with_discount = round(variant.price_clp * (100 - sub.discount_pct) / 100)
     subtotal = unit_price_with_discount
-    shipping_cost = _shipping_cost(sub.shipping_method)
+    shipping_cost = _shipping_cost_for_sub(db, sub, subtotal)
     total = subtotal + shipping_cost
 
     order = Order(
@@ -107,7 +113,7 @@ def create_subscription(payload: SubscriptionIn, db: Session = Depends(get_db)) 
         product_slug=payload.product_slug,
         size_g=payload.size_g,
         is_surprise=payload.is_surprise,
-        discount_pct=10,
+        discount_pct=get_settings(db).subscription_discount_pct,
         is_active=True,
     )
     db.add(sub)
