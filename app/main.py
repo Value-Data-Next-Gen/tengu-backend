@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from sqlalchemy import inspect, text
+
 from .api import auth as auth_api
 from .api import categories as categories_api
 from .api import checkout as checkout_api
@@ -22,9 +24,31 @@ from .seed import UPLOADS_DIR, ensure_uploads_seeded, seed_products
 from .services.subscriptions_cron import subscription_cron_loop
 
 
+def _migrate_add_missing_columns() -> None:
+    """Migraciones idempotentes para columnas agregadas a tablas existentes.
+    Base.metadata.create_all() no hace ALTER, así que cada cambio aditivo va acá.
+    """
+    inspector = inspect(engine)
+    if not inspector.has_table("orders"):
+        return  # primera arrancada limpia: create_all() ya hizo todo
+    existing = {c["name"] for c in inspector.get_columns("orders")}
+    statements = []
+    if "customer_id" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN customer_id INTEGER")
+        statements.append(
+            "CREATE INDEX IF NOT EXISTS ix_orders_customer_id ON orders(customer_id)"
+        )
+    if not statements:
+        return
+    with engine.begin() as conn:
+        for sql in statements:
+            conn.execute(text(sql))
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    _migrate_add_missing_columns()
     ensure_uploads_seeded()
     if settings.seed_on_startup:
         with SessionLocal() as db:
