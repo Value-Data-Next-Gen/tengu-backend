@@ -374,6 +374,12 @@ class ComunaZoneOut(BaseModel):
     zone: str
 
 
+class RegionOut(BaseModel):
+    """Una región con la lista de sus comunas (relación padre-hijo)."""
+    name: str
+    comunas: list[str]
+
+
 class ComunaZoneIn(BaseModel):
     region: str = Field(min_length=2, max_length=120)
     comuna: str | None = Field(default=None, max_length=120)

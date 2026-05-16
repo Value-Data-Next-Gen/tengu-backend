@@ -341,6 +341,18 @@ class ComunaZone(Base):
     zone: Mapped[str] = mapped_column(String(20))  # ohiggins, centro_otros, extremo
 
 
+class Comuna(Base):
+    """Catálogo plano de comunas de Chile (relación padre-hijo: cada comuna pertenece
+    a una región). Se siembra al startup desde seed/comunas-chile.json. Read-only
+    desde el API público; el frontend la consume para selects anidados en el
+    checkout. Las reglas de envío viven en [[ComunaZone]] aparte."""
+    __tablename__ = "comunas"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    region: Mapped[str] = mapped_column(String(120), index=True)
+    name: Mapped[str] = mapped_column(String(120), index=True)
+
+
 class HorecaLead(Base):
     __tablename__ = "horeca_leads"
 

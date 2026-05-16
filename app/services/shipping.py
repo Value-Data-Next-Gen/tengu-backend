@@ -4,9 +4,15 @@ Las tarifas, zonas y mapeo comuna→zona viven en DB (editables desde /admin).
 Si la DB está vacía, se siembra con los valores del tarifario oficial provisto
 por el cliente (tarifario_rancagua.xlsx, mayo 2026).
 """
+import json
+from pathlib import Path
+
 from sqlalchemy.orm import Session
 
-from ..models import ComunaZone, ShippingRate, SiteSettings
+from ..models import Comuna, ComunaZone, ShippingRate, SiteSettings
+
+
+COMUNAS_SEED_PATH = Path(__file__).resolve().parents[2] / "seed" / "comunas-chile.json"
 
 
 # --- Tarifario Blue Express desde Rancagua (mayo 2026) ---
@@ -69,6 +75,21 @@ def ensure_seeded(db: Session) -> None:
     if not db.query(ComunaZone).first():
         for region, comuna, zone in REGION_ZONE_SEED:
             db.add(ComunaZone(region=region, comuna=comuna, zone=zone))
+    db.commit()
+    _ensure_comunas_seeded(db)
+
+
+def _ensure_comunas_seeded(db: Session) -> None:
+    """Carga las 346 comunas de Chile si la tabla está vacía. La fuente es
+    seed/comunas-chile.json (región → [comunas])."""
+    if db.query(Comuna).first():
+        return
+    if not COMUNAS_SEED_PATH.exists():
+        return
+    data = json.loads(COMUNAS_SEED_PATH.read_text(encoding="utf-8"))
+    for region, comunas in data.items():
+        for name in comunas:
+            db.add(Comuna(region=region, name=name))
     db.commit()
 
 
