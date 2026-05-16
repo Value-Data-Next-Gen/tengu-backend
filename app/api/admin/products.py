@@ -1,5 +1,6 @@
 import re
 import shutil
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -172,12 +173,13 @@ async def upload_image(
 
     ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}[file.content_type]
     safe_slug = re.sub(r"[^a-z0-9-]", "", product.slug.lower())
-    filename = f"{safe_slug}{ext}"
+    # Timestamp suffix → URL única por upload. Evita que CDN/browser sirvan la versión vieja.
+    filename = f"{safe_slug}-{int(time.time())}{ext}"
     target = Path(UPLOADS_DIR) / filename
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(contents)
 
-    # If the previous image had a different extension, leave it (StaticFiles can serve both)
+    # Dejamos la imagen anterior en disco como fallback para HTML prerendered con la URL vieja.
     product.image = filename
     db.commit()
     db.refresh(product)
