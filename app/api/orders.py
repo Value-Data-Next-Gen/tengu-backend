@@ -64,6 +64,7 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
         shipping_cost_clp=shipping_cost,
         subtotal_clp=subtotal,
         total_clp=total,
+        payment_method=payload.payment_method,
         items=items,
     )
     db.add(order)

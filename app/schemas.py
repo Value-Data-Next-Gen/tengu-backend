@@ -56,6 +56,9 @@ class OrderIn(BaseModel):
     shipping_comuna: str | None = None
     shipping_region: str | None = None
     shipping_notes: str | None = None
+    # 'bank_transfer' = BanchilePagos manual (queda pending hasta confirmación).
+    # 'webpay'/'khipu' se setea desde /api/checkout/*/init.
+    payment_method: Literal["bank_transfer", "webpay", "khipu"] | None = None
     items: list[OrderItemIn] = Field(min_length=1)
 
 
