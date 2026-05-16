@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     # (en dev queda relativo a backend/, gitignored).
     uploads_dir: str = ""
 
+    # Google OAuth — Client ID (web app) usado para verificar ID tokens en /api/auth/google.
+    # Vacío = endpoint devuelve 503.
+    google_client_id: str = ""
+
     # Frontend URL — backend redirects here after Webpay return + magic link.
     frontend_url: str = "http://localhost:5173"
 

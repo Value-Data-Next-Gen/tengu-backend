@@ -13,7 +13,14 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..models import Customer, Order
-from ..schemas import AuthRequestLinkIn, AuthVerifyOut, CustomerOut, CustomerPatch, OrderOut
+from ..schemas import (
+    AuthGoogleIn,
+    AuthRequestLinkIn,
+    AuthVerifyOut,
+    CustomerOut,
+    CustomerPatch,
+    OrderOut,
+)
 from ..services.customer_auth import (
     consume_customer_login_token,
     generate_customer_login_token,
@@ -52,6 +59,45 @@ def verify_link(token: str = Query(...), db: Session = Depends(get_db)) -> AuthV
     email = consume_customer_login_token(db, token)
     if not email:
         raise HTTPException(status_code=401, detail="Token inválido o vencido")
+    return AuthVerifyOut(jwt=issue_customer_jwt(email), email=email)
+
+
+@router.post("/google", response_model=AuthVerifyOut)
+def google_login(payload: AuthGoogleIn, db: Session = Depends(get_db)) -> AuthVerifyOut:
+    """Verifica el ID token de Google contra los servidores de Google y
+    upserta el Customer. Mismo formato de respuesta que magic link."""
+    if not settings.google_client_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Login con Google no configurado",
+        )
+    # Import lazy: solo se carga google-auth si el endpoint se usa.
+    from google.auth.transport import requests as google_requests
+    from google.oauth2 import id_token as google_id_token
+
+    try:
+        idinfo = google_id_token.verify_oauth2_token(
+            payload.id_token,
+            google_requests.Request(),
+            settings.google_client_id,
+        )
+    except ValueError as err:
+        raise HTTPException(status_code=401, detail=f"Token Google inválido: {err}") from err
+
+    email = idinfo.get("email", "").lower().strip()
+    if not email or not idinfo.get("email_verified", False):
+        raise HTTPException(status_code=401, detail="Email no verificado en Google")
+
+    customer = db.query(Customer).filter(Customer.email == email).first()
+    if not customer:
+        customer = Customer(email=email, name=idinfo.get("name"))
+        db.add(customer)
+        db.commit()
+    elif not customer.name and idinfo.get("name"):
+        # Si el customer ya existía (compra previa anónima), llena el nombre desde Google.
+        customer.name = idinfo["name"]
+        db.commit()
+
     return AuthVerifyOut(jwt=issue_customer_jwt(email), email=email)
 
 

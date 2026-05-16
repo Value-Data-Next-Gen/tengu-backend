@@ -273,6 +273,10 @@ class AuthRequestLinkIn(BaseModel):
     email: EmailStr
 
 
+class AuthGoogleIn(BaseModel):
+    id_token: str = Field(min_length=10)
+
+
 class AuthVerifyOut(BaseModel):
     jwt: str
     email: str
