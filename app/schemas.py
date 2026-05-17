@@ -189,6 +189,9 @@ class SubscriptionOut(BaseModel):
     last_charge_at: datetime | None
     orders_count: int
     first_order_id: int | None
+    admin_notes: str | None = None
+    cancel_reason: str | None = None
+    canceled_at: datetime | None = None
     created_at: datetime
 
 
