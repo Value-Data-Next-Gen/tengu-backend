@@ -19,7 +19,7 @@ from .api import reviews as reviews_api
 from .api import site as site_api
 from .api import subscriptions as subscriptions_api
 from .api.admin import router as admin_router
-from .config import settings
+from .config import assert_production_secrets, settings
 from .db import Base, SessionLocal, engine
 from .seed import UPLOADS_DIR, ensure_uploads_seeded, seed_products
 from .services.shipping import ensure_seeded as ensure_shipping_seeded
@@ -42,15 +42,24 @@ def _migrate_add_missing_columns() -> None:
         )
     if "shipping_mode" not in existing:
         statements.append("ALTER TABLE orders ADD COLUMN shipping_mode VARCHAR(20)")
+    if "access_token" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN access_token VARCHAR(64)")
+        statements.append(
+            "CREATE INDEX IF NOT EXISTS ix_orders_access_token ON orders(access_token)"
+        )
     if not statements:
         return
     with engine.begin() as conn:
         for sql in statements:
             conn.execute(text(sql))
+    # Backfill: las órdenes legacy quedan sin access_token (nullable). Como el
+    # endpoint público lo exige, sin token quedan ilegibles desde /thanks — pero
+    # tampoco se filtran. El admin las ve igual.
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    assert_production_secrets()
     Base.metadata.create_all(bind=engine)
     _migrate_add_missing_columns()
     ensure_uploads_seeded()

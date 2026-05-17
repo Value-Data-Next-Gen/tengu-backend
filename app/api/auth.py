@@ -19,7 +19,7 @@ from ..schemas import (
     AuthVerifyOut,
     CustomerOut,
     CustomerPatch,
-    OrderOut,
+    OrderCreatedOut,
 )
 from ..services.customer_auth import (
     consume_customer_login_token,
@@ -119,11 +119,13 @@ def patch_me(
     return customer
 
 
-@router.get("/me/orders", response_model=list[OrderOut])
+@router.get("/me/orders", response_model=list[OrderCreatedOut])
 def list_my_orders(
     db: Session = Depends(get_db),
     customer: Customer = Depends(require_customer),
 ) -> list[Order]:
+    """Devuelve las órdenes del cliente autenticado, incluyendo el access_token
+    de cada una para que el dashboard pueda linkear a /thanks/{id}?token=..."""
     return (
         db.query(Order)
         .filter(Order.customer_id == customer.id)

@@ -58,7 +58,11 @@ def webpay_return(
         if order and order.status == OrderStatus.pending.value:
             order.status = OrderStatus.canceled.value
             db.commit()
-        return _redirect_to_thanks(order_id=order.id if order else None, status="canceled")
+        return _redirect_to_thanks(
+            order_id=order.id if order else None,
+            status="canceled",
+            token=order.access_token if order else None,
+        )
 
     if not token_ws:
         return _redirect_to_thanks(order_id=None, status="timeout")
@@ -84,7 +88,7 @@ def webpay_return(
         result = "failed"
 
     db.commit()
-    return _redirect_to_thanks(order_id=order.id, status=result)
+    return _redirect_to_thanks(order_id=order.id, status=result, token=order.access_token)
 
 
 # --- Khipu ---
@@ -212,9 +216,12 @@ def khipu_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
 # --- Helpers ---
 
 
-def _redirect_to_thanks(order_id: int | None, status: str) -> RedirectResponse:
+def _redirect_to_thanks(
+    order_id: int | None, status: str, token: str | None = None
+) -> RedirectResponse:
     if order_id:
-        url = f"{settings.frontend_url}/thanks/{order_id}?status={status}"
+        suffix = f"&token={token}" if token else ""
+        url = f"{settings.frontend_url}/thanks/{order_id}?status={status}{suffix}"
     else:
         url = f"{settings.frontend_url}/checkout/error?status={status}"
     return RedirectResponse(url=url, status_code=303)

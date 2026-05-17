@@ -1,6 +1,10 @@
+import os
 import secrets
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+DEFAULT_ADMIN_PASSWORD = "tengu123"  # solo válido en localhost dev
 
 
 class Settings(BaseSettings):
@@ -41,8 +45,8 @@ class Settings(BaseSettings):
     # --- Admin & auth ---
     admin_emails: str = "g.rojaschacon@gmail.com"
     # Password compartido para los admins listados en admin_emails.
-    # IMPORTANTE: cambiar en producción vía env var.
-    admin_password: str = "tengu123"
+    # IMPORTANTE: cambiar en producción vía env var ADMIN_PASSWORD.
+    admin_password: str = DEFAULT_ADMIN_PASSWORD
     jwt_secret: str = secrets.token_urlsafe(32)  # override in .env for stable sessions
     jwt_algorithm: str = "HS256"
     magic_link_ttl_minutes: int = 15  # legacy, no usado en password auth
@@ -70,3 +74,38 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def _is_production() -> bool:
+    """Detecta Azure App Service (que setea WEBSITE_SITE_NAME automáticamente)
+    o ENVIRONMENT=production explícito. Tunnel/cloudflare locales no cuentan."""
+    if os.environ.get("ENVIRONMENT", "").lower() == "production":
+        return True
+    if os.environ.get("WEBSITE_SITE_NAME"):  # Azure App Service
+        return True
+    return False
+
+
+def assert_production_secrets() -> None:
+    """Llamada al startup. En producción (Azure App Service o ENVIRONMENT=production)
+    abortamos si los secretos siguen en sus defaults. En dev se permite seguir
+    con tengu123 + jwt_secret aleatorio.
+
+    Escape hatch para casos raros: TENGU_ALLOW_DEFAULT_SECRETS=1.
+    """
+    if os.environ.get("TENGU_ALLOW_DEFAULT_SECRETS") == "1":
+        return
+    if not _is_production():
+        return
+    if settings.admin_password == DEFAULT_ADMIN_PASSWORD:
+        raise RuntimeError(
+            "ADMIN_PASSWORD no configurado en producción — "
+            "setea la env var ADMIN_PASSWORD antes de iniciar el backend."
+        )
+    if not os.environ.get("JWT_SECRET"):
+        # jwt_secret tiene default random por proceso; si no está en env,
+        # cada restart invalida todas las sesiones admin.
+        raise RuntimeError(
+            "JWT_SECRET no configurado en producción — "
+            "setea la env var JWT_SECRET (string aleatorio largo) para que las sesiones persistan."
+        )

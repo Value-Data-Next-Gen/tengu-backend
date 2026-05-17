@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -5,6 +6,11 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
+
+
+def _gen_access_token() -> str:
+    """Token URL-safe para autorizar lecturas de Order desde /thanks sin login."""
+    return secrets.token_urlsafe(24)
 
 
 class Product(Base):
@@ -98,6 +104,13 @@ class Order(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     status: Mapped[str] = mapped_column(String(20), default=OrderStatus.pending.value, index=True)
+
+    # Token (URL-safe) que autoriza lectura del detalle desde /thanks sin login.
+    # Se entrega solo al cliente que creó la orden; corta enumeración por order_id.
+    # Nullable porque las órdenes legacy creadas antes de esta migración no lo tienen.
+    access_token: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True, default=_gen_access_token
+    )
 
     # Asociación opcional con cuenta de cliente. Se hace upsert al crear la orden.
     # Nullable porque hay órdenes legacy sin Customer.

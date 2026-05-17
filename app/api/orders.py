@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+import hmac
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Customer, Order, OrderItem, Product, ShippingMethod
-from ..schemas import OrderIn, OrderOut
+from ..schemas import OrderCreatedOut, OrderIn, OrderOut
 from ..services.shipping import quote_shipping
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -38,7 +40,7 @@ def _upsert_customer(db: Session, payload: OrderIn) -> Customer:
     return customer
 
 
-@router.post("", response_model=OrderOut, status_code=201)
+@router.post("", response_model=OrderCreatedOut, status_code=201)
 def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
     if payload.shipping_method != ShippingMethod.pickup.value:
         if not payload.shipping_address or not payload.shipping_comuna:
@@ -118,8 +120,18 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
 
 
 @router.get("/{order_id}", response_model=OrderOut)
-def get_order(order_id: int, db: Session = Depends(get_db)) -> Order:
+def get_order(
+    order_id: int,
+    token: str = Query(..., min_length=8, max_length=64),
+    db: Session = Depends(get_db),
+) -> Order:
+    """Lectura pública de una orden. Exige el access_token entregado al crearla
+    (POST /api/orders) para evitar enumeración por order_id."""
     order = db.get(Order, order_id)
-    if not order:
+    # Legacy orders sin token también devuelven 404 acá (no se leen desde
+    # /thanks); el admin las sigue viendo por su propio endpoint.
+    if not order or not order.access_token:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if not hmac.compare_digest(order.access_token, token):
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     return order
