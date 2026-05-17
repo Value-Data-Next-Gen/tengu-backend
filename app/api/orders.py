@@ -49,7 +49,10 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
     items: list[OrderItem] = []
     subtotal = 0
     for line in payload.items:
-        product = db.query(Product).filter(Product.slug == line.product_slug).first()
+        product = db.query(Product).filter(
+            Product.slug == line.product_slug,
+            Product.is_published == True,  # noqa: E712
+        ).first()
         if not product:
             raise HTTPException(status_code=422, detail=f"Producto desconocido: {line.product_slug}")
         variant = next((v for v in product.variants if v.size_g == line.size_g), None)
@@ -57,6 +60,14 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
             raise HTTPException(
                 status_code=422,
                 detail=f"Formato {line.size_g}g no disponible para {product.name}",
+            )
+        if variant.stock_qty < line.quantity:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"Stock insuficiente para {product.name} {variant.size_g}g — "
+                    f"quedan {variant.stock_qty} disponibles."
+                ),
             )
         line_subtotal = variant.price_clp * line.quantity
         subtotal += line_subtotal
@@ -91,21 +102,18 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
 
     customer = _upsert_customer(db, payload)
 
+    is_pickup = payload.shipping_method == ShippingMethod.pickup.value
     order = Order(
         customer_id=customer.id,
-        customer_email=payload.customer_email.lower(),
+        customer_email=payload.customer_email.lower().strip(),
         customer_name=payload.customer_name.strip(),
         customer_phone=payload.customer_phone.strip(),
         customer_rut=payload.customer_rut.strip(),
         shipping_method=payload.shipping_method,
-        shipping_mode=(
-            payload.shipping_mode
-            if payload.shipping_method != ShippingMethod.pickup.value
-            else None
-        ),
-        shipping_address=payload.shipping_address,
-        shipping_comuna=payload.shipping_comuna,
-        shipping_region=payload.shipping_region,
+        shipping_mode=None if is_pickup else payload.shipping_mode,
+        shipping_address=None if is_pickup else payload.shipping_address,
+        shipping_comuna=None if is_pickup else payload.shipping_comuna,
+        shipping_region=None if is_pickup else payload.shipping_region,
         shipping_notes=payload.shipping_notes,
         shipping_cost_clp=shipping_cost,
         subtotal_clp=subtotal,

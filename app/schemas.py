@@ -1,7 +1,34 @@
+import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+
+_RUT_CLEANUP = re.compile(r"[.\s]")
+
+
+def _validate_chilean_rut(value: str) -> str:
+    """Valida y normaliza un RUT chileno. Acepta '12.345.678-K', '12345678-k',
+    '12345678K'; devuelve '12345678-K' (uppercase, sin puntos, con guion).
+    Rechaza con ValueError si el dígito verificador no coincide."""
+    clean = _RUT_CLEANUP.sub("", value).upper()
+    if "-" in clean:
+        body, dv = clean.split("-", 1)
+    else:
+        body, dv = clean[:-1], clean[-1]
+    if not body.isdigit() or len(body) < 7 or len(body) > 9 or len(dv) != 1:
+        raise ValueError("Formato de RUT inválido")
+    # Módulo 11
+    total, mult = 0, 2
+    for ch in reversed(body):
+        total += int(ch) * mult
+        mult = 2 if mult == 7 else mult + 1
+    rem = 11 - (total % 11)
+    expected = "0" if rem == 11 else "K" if rem == 10 else str(rem)
+    if dv != expected:
+        raise ValueError("Dígito verificador del RUT no coincide")
+    return f"{body}-{dv}"
 
 
 class VariantOut(BaseModel):
@@ -54,14 +81,19 @@ class OrderIn(BaseModel):
     shipping_method: Literal["rm", "regiones", "pickup"]
     # 'domicilio' o 'punto' Blue Express. Solo cuando shipping_method != 'pickup'.
     shipping_mode: Literal["domicilio", "punto"] | None = None
-    shipping_address: str | None = None
-    shipping_comuna: str | None = None
-    shipping_region: str | None = None
-    shipping_notes: str | None = None
+    shipping_address: str | None = Field(default=None, max_length=300)
+    shipping_comuna: str | None = Field(default=None, max_length=120)
+    shipping_region: str | None = Field(default=None, max_length=120)
+    shipping_notes: str | None = Field(default=None, max_length=500)
+
+    @field_validator("customer_rut")
+    @classmethod
+    def _rut_valid(cls, v: str) -> str:
+        return _validate_chilean_rut(v)
     # 'bank_transfer' = BanchilePagos manual (queda pending hasta confirmación).
     # 'webpay'/'khipu' se setea desde /api/checkout/*/init.
     payment_method: Literal["bank_transfer", "webpay", "khipu"] | None = None
-    items: list[OrderItemIn] = Field(min_length=1)
+    items: list[OrderItemIn] = Field(min_length=1, max_length=20)
 
 
 class OrderItemOut(BaseModel):
@@ -126,14 +158,20 @@ class SubscriptionIn(BaseModel):
     customer_phone: str = Field(min_length=6, max_length=40)
     customer_rut: str = Field(min_length=8, max_length=20)
     shipping_method: Literal["rm", "regiones", "pickup"]
-    shipping_address: str | None = None
-    shipping_comuna: str | None = None
-    shipping_region: str | None = None
-    shipping_notes: str | None = None
-    frequency_days: Literal[30, 60, 90]
+    shipping_address: str | None = Field(default=None, max_length=300)
+    shipping_comuna: str | None = Field(default=None, max_length=120)
+    shipping_region: str | None = Field(default=None, max_length=120)
+    shipping_notes: str | None = Field(default=None, max_length=500)
+    # 45 = "cada 6 semanas" (opción real del frontend).
+    frequency_days: Literal[30, 45, 60, 90]
     product_slug: str | None = None  # None si is_surprise=True
     size_g: int = Field(gt=0)
     is_surprise: bool = False
+
+    @field_validator("customer_rut")
+    @classmethod
+    def _rut_valid(cls, v: str) -> str:
+        return _validate_chilean_rut(v)
 
 
 class SubscriptionOut(BaseModel):
@@ -358,9 +396,9 @@ class ShippingRatePatch(BaseModel):
 
 
 class ShippingQuoteIn(BaseModel):
-    region: str
-    comuna: str | None = None
-    weight_g: int = Field(ge=0)
+    region: str = Field(min_length=1, max_length=120)
+    comuna: str | None = Field(default=None, max_length=120)
+    weight_g: int = Field(gt=0, le=200_000)  # tope sanidad: 200 kg
     mode: Literal["domicilio", "punto"] = "domicilio"
     subtotal_clp: int = Field(ge=0)
 
