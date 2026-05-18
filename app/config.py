@@ -109,3 +109,16 @@ def assert_production_secrets() -> None:
             "JWT_SECRET no configurado en producción — "
             "setea la env var JWT_SECRET (string aleatorio largo) para que las sesiones persistan."
         )
+    if not settings.uploads_dir.startswith("/home/"):
+        # En Azure App Service /home es la única zona persistente. Sin esto,
+        # las imágenes subidas desde /admin se pierden en cada redeploy.
+        # Caso típico: Git Bash en Windows convierte "/home/uploads" a
+        # "C:/Program Files/Git/home/uploads" al ejecutar `az ... --settings`.
+        # Si pasa, usa `MSYS_NO_PATHCONV=1 az ...` o setealo desde el Portal.
+        raise RuntimeError(
+            "UPLOADS_DIR debe ser un path absoluto bajo /home/ para sobrevivir "
+            "los redeploys de Azure App Service. "
+            f"Valor actual: {settings.uploads_dir!r}. "
+            "Setea UPLOADS_DIR=/home/uploads desde Azure Portal "
+            "(Configuration → Application settings)."
+        )
