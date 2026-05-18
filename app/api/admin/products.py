@@ -12,7 +12,7 @@ from ...db import get_db
 from ...models import Product, Variant
 from ...schemas import ProductIn, ProductOut, ProductPatch, VariantIn
 from ...services.auth import require_admin
-from ...seed import UPLOADS_DIR
+from ...seed import SEED_IMAGES, UPLOADS_DIR, ensure_uploads_seeded
 
 router = APIRouter(prefix="/products", dependencies=[Depends(require_admin)])
 
@@ -186,6 +186,41 @@ async def upload_image(
     db.commit()
     db.refresh(product)
     return product
+
+
+# Recovery: restaura imágenes faltantes apuntando al seed más parecido por
+# overlap de tokens del slug. Útil cuando se pierde /home/uploads por mala
+# config (ver UPLOADS_DIR + MSYS issue) y la DB tiene filenames huérfanos.
+@router.post("/restore-images")
+def restore_seed_images(db: Session = Depends(get_db)) -> dict:
+    ensure_uploads_seeded()  # idempotente: copia seed/images → /home/uploads si vacío
+    seed_files = list(SEED_IMAGES.glob("*.jpg")) + list(SEED_IMAGES.glob("*.png")) + list(SEED_IMAGES.glob("*.webp"))
+    seed_map = {p.stem: p.name for p in seed_files}
+
+    updated: list[dict] = []
+    skipped: list[str] = []
+    unmatched: list[str] = []
+
+    for prod in db.query(Product).all():
+        if prod.image and (UPLOADS_DIR / prod.image).exists():
+            skipped.append(prod.slug)
+            continue
+        slug_tokens = set(prod.slug.split("-"))
+        best_filename: str | None = None
+        best_score = 0
+        for seed_stem, seed_filename in seed_map.items():
+            score = len(slug_tokens & set(seed_stem.split("-")))
+            if score > best_score:
+                best_score = score
+                best_filename = seed_filename
+        if best_filename and best_score >= 1:
+            prod.image = best_filename
+            updated.append({"slug": prod.slug, "image": best_filename, "score": best_score})
+        else:
+            unmatched.append(prod.slug)
+
+    db.commit()
+    return {"updated": updated, "skipped": skipped, "unmatched": unmatched}
 
 
 # Cleanup helper used by tests / dev
