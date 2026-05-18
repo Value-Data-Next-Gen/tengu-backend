@@ -270,7 +270,7 @@ class CategoryPatch(BaseModel):
 
 class VariantIn(BaseModel):
     size_g: int = Field(gt=0)
-    price_clp: int = Field(ge=0)
+    price_clp: int = Field(gt=0)  # no aceptamos café gratis
     stock_qty: int = Field(ge=0, default=50)
 
 
