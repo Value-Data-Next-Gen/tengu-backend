@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     mp_tk_prod: str = ""
     mp_pk_prod: str = ""
     mp_environment: str = "test"
+    # "Clave secreta" del webhook (panel MP → Webhooks → Configurar firma).
+    # Se usa para validar el header x-signature en /mercadopago/notify.
+    # Si queda vacía, se acepta cualquier request (modo dev/pre-config).
+    mp_cs_wbhk: str = ""
 
     # Shipping costs (CLP).
     shipping_rm_clp: int = 3500

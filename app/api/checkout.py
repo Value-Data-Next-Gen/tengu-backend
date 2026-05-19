@@ -1,3 +1,5 @@
+import hashlib
+import hmac
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -11,6 +13,31 @@ from ..schemas import CheckoutInitIn, KhipuInitOut, MercadoPagoInitOut, WebpayIn
 from ..services import khipu, mercadopago, webpay
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
+
+
+def _verify_mp_signature(
+    *, x_signature: str | None, x_request_id: str | None, data_id: str | None
+) -> bool:
+    """Valida HMAC-SHA256 del header x-signature contra MP_CS_WBHK.
+    Si el secret no está configurado, devuelve True (modo permisivo dev).
+    Docs: https://www.mercadopago.cl/developers/es/docs/your-integrations/notifications/webhooks#editor_5
+    """
+    if not settings.mp_cs_wbhk:
+        return True  # secret no configurado: aceptar (dev/pre-config)
+    if not x_signature or not data_id:
+        return False
+    # x-signature formato: "ts=1704908010,v1=abc123def456..."
+    parts = dict(p.split("=", 1) for p in x_signature.split(",") if "=" in p)
+    ts = parts.get("ts")
+    v1 = parts.get("v1")
+    if not ts or not v1:
+        return False
+    # Manifest: id:{data_id};request-id:{x_request_id};ts:{ts};
+    manifest = f"id:{data_id};request-id:{x_request_id or ''};ts:{ts};"
+    expected = hmac.new(
+        settings.mp_cs_wbhk.encode(), manifest.encode(), hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, v1)
 
 
 # --- Webpay ---
@@ -295,6 +322,16 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
     # "merchant_order_payment" u otros eventos no-payment por substring.
     if topic.lower() not in {"payment", "topic_payment_wh"} or not payment_id:
         return {"ok": True, "ignored": True, "topic": topic}
+
+    # Verificación HMAC del header x-signature. Solo aplica si MP_CS_WBHK está
+    # configurado. Esto bloquea webhooks falsificados que conozcan order_id.
+    valid = _verify_mp_signature(
+        x_signature=request.headers.get("x-signature"),
+        x_request_id=request.headers.get("x-request-id"),
+        data_id=str(payment_id),
+    )
+    if not valid:
+        raise HTTPException(status_code=401, detail="Firma del webhook inválida")
 
     try:
         payment = mercadopago.get_payment(str(payment_id))
