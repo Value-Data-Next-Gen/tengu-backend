@@ -51,11 +51,13 @@ def _migrate_add_missing_columns() -> None:
         )
         backfill_access_tokens = True
 
-    # Migración para site_settings.subscription_enabled
+    # Migración para site_settings.subscription_enabled / customer_accounts_enabled
     if inspector.has_table("site_settings"):
         ss_cols = {c["name"] for c in inspector.get_columns("site_settings")}
         if "subscription_enabled" not in ss_cols:
             statements.append("ALTER TABLE site_settings ADD COLUMN subscription_enabled BOOLEAN DEFAULT 1")
+        if "customer_accounts_enabled" not in ss_cols:
+            statements.append("ALTER TABLE site_settings ADD COLUMN customer_accounts_enabled BOOLEAN DEFAULT 0")
 
     if not statements:
         return

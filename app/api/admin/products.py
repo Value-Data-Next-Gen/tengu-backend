@@ -188,6 +188,41 @@ async def upload_image(
     return product
 
 
+# GC: borra archivos en UPLOADS_DIR que no son referenciados por ningún
+# Product.image o Post.cover. Deja siempre los archivos seed iniciales (en
+# caso que un futuro reset de DB necesite volver a ellos).
+@router.post("/cleanup-orphan-images")
+def cleanup_orphan_images(db: Session = Depends(get_db)) -> dict:
+    from ...models import Post
+    referenced: set[str] = set()
+    for prod in db.query(Product).all():
+        if prod.image:
+            referenced.add(prod.image)
+    for post in db.query(Post).all():
+        # post.cover es URL ej. "/uploads/foo.jpg" → extraemos basename
+        if post.cover and post.cover.startswith("/uploads/"):
+            referenced.add(post.cover.removeprefix("/uploads/"))
+
+    # Nunca borrar archivos del seed (los necesitamos para restore-images).
+    seed_names = {p.name for p in SEED_IMAGES.glob("*")}
+
+    deleted: list[str] = []
+    bytes_freed = 0
+    if UPLOADS_DIR.exists():
+        for f in UPLOADS_DIR.iterdir():
+            if not f.is_file():
+                continue
+            if f.name in referenced or f.name in seed_names:
+                continue
+            try:
+                bytes_freed += f.stat().st_size
+                f.unlink()
+                deleted.append(f.name)
+            except OSError:
+                continue
+    return {"deleted": deleted, "bytes_freed": bytes_freed, "kept": len(referenced)}
+
+
 # Recovery: restaura imágenes faltantes apuntando al seed más parecido por
 # overlap de tokens del slug. Útil cuando se pierde /home/uploads por mala
 # config (ver UPLOADS_DIR + MSYS issue) y la DB tiene filenames huérfanos.

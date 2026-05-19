@@ -315,6 +315,9 @@ class SiteSettings(Base):
     # y se oculta del header/footer. Útil mientras Webpay/Khipu no estén activos
     # para los cobros recurrentes.
     subscription_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Si false, /cuenta y /cuenta/login muestran "próximamente" y los JWT
+    # viejos persistidos en localStorage no acceden al dashboard.
+    customer_accounts_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     # Wholesale / HORECA
     wholesale_min_kg: Mapped[int] = mapped_column(Integer, default=5)
     wholesale_lead_msg: Mapped[str] = mapped_column(
