@@ -411,19 +411,30 @@ def mercadopago_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
     if not payments:
         return {"order_status": order.status, "mp_status": None}
 
-    # Tomamos el más reciente (MP devuelve ordenado por date_created DESC).
-    payment = payments[0]
+    # Si hubo varios intentos (tarjeta rechazada → reintento aprobado), MP los
+    # devuelve cronológicamente y NO siempre DESC. Priorizamos cualquier
+    # "approved", si no, el más reciente por date_created. Tomar payments[0] a
+    # ciegas marcaba órdenes pagadas como failed cuando el primer intento había
+    # sido rejected.
+    approved = [p for p in payments if p.get("status") == "approved"]
+    if approved:
+        payment = max(approved, key=lambda p: p.get("date_created") or "")
+    else:
+        payment = max(payments, key=lambda p: p.get("date_created") or "")
     order.mp_payment_id = str(payment.get("id", ""))
     order.mp_response = payment
     status_mp = payment.get("status", "")
-    if order.status == OrderStatus.pending.value:
-        if status_mp == "approved":
-            paid_amount = round(float(payment.get("transaction_amount") or 0))
-            if abs(paid_amount - order.total_clp) <= 2:
-                order.status = OrderStatus.paid.value
-                order.paid_at = datetime.now(timezone.utc)
-        elif status_mp in {"rejected", "cancelled"}:
-            order.status = OrderStatus.failed.value
+    paid_amount = round(float(payment.get("transaction_amount") or 0))
+    amount_ok = abs(paid_amount - order.total_clp) <= 2
+
+    # Si MP confirma un pago aprobado con monto correcto, marcamos paid
+    # aunque la orden esté en "failed" — un verify anterior buggeado pudo
+    # haberla degradado tomando un intento rechazado. paid manda sobre failed.
+    if status_mp == "approved" and amount_ok and order.status != OrderStatus.paid.value:
+        order.status = OrderStatus.paid.value
+        order.paid_at = datetime.now(timezone.utc)
+    elif order.status == OrderStatus.pending.value and status_mp in {"rejected", "cancelled"}:
+        order.status = OrderStatus.failed.value
     db.commit()
     return {"order_status": order.status, "mp_status": status_mp}
 
