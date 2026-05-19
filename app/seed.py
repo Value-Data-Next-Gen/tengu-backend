@@ -16,15 +16,19 @@ UPLOADS_DIR = Path(settings.uploads_dir) if settings.uploads_dir else BACKEND_RO
 
 
 def ensure_uploads_seeded() -> None:
-    """Copia las imágenes seed al directorio uploads/ si está vacío."""
+    """Copia los archivos del seed que aún no estén en UPLOADS_DIR.
+    Idempotente: corre en cada startup. Cuando agregamos un PNG nuevo al
+    seed, el siguiente deploy lo trae al disco persistente sin pisar lo
+    que ya estaba ahí."""
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    if any(UPLOADS_DIR.iterdir()):
-        return
     if not SEED_IMAGES.exists():
         return
     for src in SEED_IMAGES.glob("*"):
-        if src.is_file():
-            shutil.copy2(src, UPLOADS_DIR / src.name)
+        if not src.is_file():
+            continue
+        target = UPLOADS_DIR / src.name
+        if not target.exists():
+            shutil.copy2(src, target)
 
 
 def seed_products(db: Session) -> int:
