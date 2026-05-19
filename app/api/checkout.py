@@ -291,8 +291,9 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
         or qp.get("id")
     )
 
-    # Solo procesamos eventos de tipo payment. Otros (merchant_order, plan) se ignoran.
-    if "payment" not in topic.lower() or not payment_id:
+    # Topic estricto: MP usa "payment" o "topic_payment_wh". Evitamos matchear
+    # "merchant_order_payment" u otros eventos no-payment por substring.
+    if topic.lower() not in {"payment", "topic_payment_wh"} or not payment_id:
         return {"ok": True, "ignored": True, "topic": topic}
 
     try:
@@ -313,27 +314,81 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada para ese pago")
 
-    # Validar monto: MP devuelve transaction_amount (float). Comparamos contra total_clp.
-    paid_amount = int(payment.get("transaction_amount", 0))
-    if paid_amount != order.total_clp:
-        # Monto no coincide → no marcar pagada. Quedará pending hasta revisión manual.
+    # Validar monto: MP devuelve transaction_amount como float ("15000.0").
+    # CLP no tiene decimales pero por redondeo o descuento puede llegar "14999.99".
+    # Aceptamos tolerancia ±2 CLP para evitar amount_mismatch por float-rounding.
+    paid_amount = round(float(payment.get("transaction_amount") or 0))
+    if abs(paid_amount - order.total_clp) > 2:
         order.mp_response = payment
-        order.admin_notes = (order.admin_notes or "") + f"\n[MP] Monto recibido {paid_amount} ≠ esperado {order.total_clp}"
+        # Cap el admin_notes a 1000 chars para no explotar la columna en reintentos.
+        existing = order.admin_notes or ""
+        if "[MP] amount_mismatch" not in existing:
+            order.admin_notes = (existing + f"\n[MP] amount_mismatch: recibido {paid_amount} ≠ esperado {order.total_clp}").strip()[:1000]
         db.commit()
         return {"ok": True, "warning": "amount_mismatch"}
 
     order.mp_payment_id = str(payment.get("id", ""))
     order.mp_response = payment
     status_mp = payment.get("status", "")
-    if status_mp == "approved":
-        if order.status == OrderStatus.pending.value:
+
+    # Idempotencia: si la orden ya está paid o canceled/failed por un webhook
+    # previo, NO sobrescribimos. Refund/charged_back posteriores no degradan
+    # el estado paid (requieren tratamiento manual + emisión de devolución).
+    if order.status == OrderStatus.pending.value:
+        if status_mp == "approved":
             order.status = OrderStatus.paid.value
             order.paid_at = datetime.now(timezone.utc)
-    elif status_mp in {"rejected", "cancelled", "refunded", "charged_back"}:
-        order.status = OrderStatus.failed.value
+        elif status_mp in {"rejected", "cancelled"}:
+            order.status = OrderStatus.failed.value
+    elif order.status == OrderStatus.paid.value and status_mp in {"refunded", "charged_back"}:
+        # Pago revertido post-aprobación: dejamos nota para revisión admin pero
+        # no automatizamos el cambio de estado (necesita refund flow + stock).
+        existing = order.admin_notes or ""
+        if "[MP] refund detectado" not in existing:
+            order.admin_notes = (existing + f"\n[MP] refund detectado ({status_mp}). Revisar stock y devolución.").strip()[:1000]
 
     db.commit()
     return {"ok": True, "status": status_mp}
+
+
+@router.post("/mercadopago/verify/{order_id}")
+def mercadopago_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
+    """Re-verifica con MP el estado del pago de la orden y actualiza la DB.
+    Útil cuando el webhook se perdió (cold start Azure) o el usuario vuelve a
+    /thanks antes que MP llame al notify. Misma lógica que mercadopago_notify
+    pero buscando el payment por external_reference."""
+    if not mercadopago.is_configured():
+        raise HTTPException(status_code=503, detail="Mercado Pago no está configurado")
+
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+    if not order.mp_preference_id:
+        raise HTTPException(status_code=404, detail="Orden no tiene pago MP iniciado")
+
+    try:
+        payments = mercadopago.search_payments_by_external_reference(f"tengu-{order.id}")
+    except mercadopago.MercadoPagoError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    if not payments:
+        return {"order_status": order.status, "mp_status": None}
+
+    # Tomamos el más reciente (MP devuelve ordenado por date_created DESC).
+    payment = payments[0]
+    order.mp_payment_id = str(payment.get("id", ""))
+    order.mp_response = payment
+    status_mp = payment.get("status", "")
+    if order.status == OrderStatus.pending.value:
+        if status_mp == "approved":
+            paid_amount = round(float(payment.get("transaction_amount") or 0))
+            if abs(paid_amount - order.total_clp) <= 2:
+                order.status = OrderStatus.paid.value
+                order.paid_at = datetime.now(timezone.utc)
+        elif status_mp in {"rejected", "cancelled"}:
+            order.status = OrderStatus.failed.value
+    db.commit()
+    return {"order_status": order.status, "mp_status": status_mp}
 
 
 # --- Helpers ---

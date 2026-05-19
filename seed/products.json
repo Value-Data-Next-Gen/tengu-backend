@@ -8,16 +8,28 @@
     "process": "Lavado",
     "altitude_masl": "1700",
     "roast_profile": "Filtrado",
-    "tasting_notes": ["Chocolate", "Caramelo"],
+    "tasting_notes": [
+      "Chocolate",
+      "Caramelo"
+    ],
     "body": "Limpio",
     "acidity": "Media",
-    "image": "colombia-corazon.jpg",
+    "image": "caldas-manzanares.png",
     "featured": false,
     "category": "Filtrado",
     "variants": [
-      { "size_g": 250, "price_clp": 13900 },
-      { "size_g": 500, "price_clp": 25000 },
-      { "size_g": 1000, "price_clp": 32500 }
+      {
+        "size_g": 250,
+        "price_clp": 13900
+      },
+      {
+        "size_g": 500,
+        "price_clp": 25000
+      },
+      {
+        "size_g": 1000,
+        "price_clp": 32500
+      }
     ]
   },
   {
@@ -30,16 +42,30 @@
     "altitude_masl": "1700-1900",
     "harvest": "Febrero - Marzo, 2025",
     "roast_profile": "Filtrado",
-    "tasting_notes": ["Frutos amarillos", "Chocolate dulce", "Caramelo", "Vainilla"],
+    "tasting_notes": [
+      "Frutos amarillos",
+      "Chocolate dulce",
+      "Caramelo",
+      "Vainilla"
+    ],
     "body": "Medio cremoso",
     "acidity": "Cítrica",
-    "image": "familia-zambrano-colombia.jpg",
+    "image": "familia-zambrano-colombia.png",
     "featured": false,
     "category": "Filtrado",
     "variants": [
-      { "size_g": 250, "price_clp": 15000 },
-      { "size_g": 500, "price_clp": 26500 },
-      { "size_g": 1000, "price_clp": 56500 }
+      {
+        "size_g": 250,
+        "price_clp": 15000
+      },
+      {
+        "size_g": 500,
+        "price_clp": 26500
+      },
+      {
+        "size_g": 1000,
+        "price_clp": 56500
+      }
     ]
   },
   {
@@ -52,16 +78,31 @@
     "altitude_masl": "2000",
     "harvest": "Febrero - Abril, 2026",
     "roast_profile": "Filtrado",
-    "tasting_notes": ["Naranja", "Fruta madura", "Panela", "Chocolate", "Nuez"],
+    "tasting_notes": [
+      "Naranja",
+      "Fruta madura",
+      "Panela",
+      "Chocolate",
+      "Nuez"
+    ],
     "body": "Cremoso",
     "acidity": "Cítrica",
     "image": "peru-cajamarca-el-bambu.jpg",
     "featured": false,
     "category": "Filtrado",
     "variants": [
-      { "size_g": 250, "price_clp": 13900 },
-      { "size_g": 500, "price_clp": 25200 },
-      { "size_g": 1000, "price_clp": 32500 }
+      {
+        "size_g": 250,
+        "price_clp": 13900
+      },
+      {
+        "size_g": 500,
+        "price_clp": 25200
+      },
+      {
+        "size_g": 1000,
+        "price_clp": 32500
+      }
     ]
   },
   {
@@ -75,16 +116,29 @@
     "harvest": "Septiembre - Noviembre, 2025",
     "roast_profile": "Filtrado",
     "producer": "Marie Gorette Mukamurenzi",
-    "tasting_notes": ["Frutos rojos", "Chocolate con leche", "Mandarina"],
+    "tasting_notes": [
+      "Frutos rojos",
+      "Chocolate con leche",
+      "Mandarina"
+    ],
     "body": "Redondo, jugoso",
     "acidity": "Málica, brillante",
-    "image": "rwanda-marie-gorette-natural.jpg",
+    "image": "rwanda-marie-gorette-natural.png",
     "featured": true,
     "category": "Filtrado",
     "variants": [
-      { "size_g": 250, "price_clp": 16500 },
-      { "size_g": 500, "price_clp": 28000 },
-      { "size_g": 1000, "price_clp": 46100 }
+      {
+        "size_g": 250,
+        "price_clp": 16500
+      },
+      {
+        "size_g": 500,
+        "price_clp": 28000
+      },
+      {
+        "size_g": 1000,
+        "price_clp": 46100
+      }
     ]
   },
   {
@@ -98,16 +152,29 @@
     "harvest": "Septiembre - Noviembre, 2025",
     "roast_profile": "Filtrado",
     "producer": "Marie Gorette Mukamurenzi",
-    "tasting_notes": ["Durazno", "Flor de jamaica", "Pomelo"],
+    "tasting_notes": [
+      "Durazno",
+      "Flor de jamaica",
+      "Pomelo"
+    ],
     "body": "Medio-alto, jugoso",
     "acidity": "Media, cítrica",
-    "image": "rwanda-marie-gorette-lavado.jpg",
+    "image": "rwanda-marie-gorette-lavado.png",
     "featured": false,
     "category": "Filtrado",
     "variants": [
-      { "size_g": 250, "price_clp": 14000 },
-      { "size_g": 500, "price_clp": 26500 },
-      { "size_g": 1000, "price_clp": 42000 }
+      {
+        "size_g": 250,
+        "price_clp": 14000
+      },
+      {
+        "size_g": 500,
+        "price_clp": 26500
+      },
+      {
+        "size_g": 1000,
+        "price_clp": 42000
+      }
     ]
   },
   {
@@ -120,16 +187,30 @@
     "altitude_masl": "1600",
     "harvest": "Abril - Mayo, 2025",
     "roast_profile": "Filtrado",
-    "tasting_notes": ["Dulce", "Chocolate", "Caramelo", "Nueces"],
+    "tasting_notes": [
+      "Dulce",
+      "Chocolate",
+      "Caramelo",
+      "Nueces"
+    ],
     "body": "Medio jugoso, residual prolongado",
     "acidity": "Media",
-    "image": "colombia-corazon.jpg",
+    "image": "colombia-corazon.png",
     "featured": false,
     "category": "Filtrado",
     "variants": [
-      { "size_g": 250, "price_clp": 12500 },
-      { "size_g": 500, "price_clp": 21000 },
-      { "size_g": 1000, "price_clp": 28500 }
+      {
+        "size_g": 250,
+        "price_clp": 12500
+      },
+      {
+        "size_g": 500,
+        "price_clp": 21000
+      },
+      {
+        "size_g": 1000,
+        "price_clp": 28500
+      }
     ]
   },
   {
@@ -142,16 +223,30 @@
     "altitude_masl": "1600-1700",
     "harvest": "Febrero - Abril, 2026",
     "roast_profile": "Espresso",
-    "tasting_notes": ["Chocolate", "Cacao", "Panela", "Frutos secos"],
+    "tasting_notes": [
+      "Chocolate",
+      "Cacao",
+      "Panela",
+      "Frutos secos"
+    ],
     "body": "Sedoso",
     "acidity": "Cítrica",
-    "image": "tengu-espresso-blend.jpg",
+    "image": "tengu-espresso-blend.png",
     "featured": true,
     "category": "Espresso",
     "variants": [
-      { "size_g": 250, "price_clp": 13000 },
-      { "size_g": 500, "price_clp": 23500 },
-      { "size_g": 1000, "price_clp": 30000 }
+      {
+        "size_g": 250,
+        "price_clp": 13000
+      },
+      {
+        "size_g": 500,
+        "price_clp": 23500
+      },
+      {
+        "size_g": 1000,
+        "price_clp": 30000
+      }
     ]
   },
   {
@@ -164,16 +259,29 @@
     "altitude_masl": "1700",
     "harvest": "Marzo - Noviembre, 2025",
     "roast_profile": "Espresso",
-    "tasting_notes": ["Caramelo", "Chocolate amargo", "Frutos secos"],
+    "tasting_notes": [
+      "Caramelo",
+      "Chocolate amargo",
+      "Frutos secos"
+    ],
     "body": "Medio alto",
     "acidity": "Cítrica",
-    "image": "tengu-espresso-beam.jpg",
+    "image": "tengu-espresso-beam.png",
     "featured": true,
     "category": "Espresso",
     "variants": [
-      { "size_g": 250, "price_clp": 13000 },
-      { "size_g": 500, "price_clp": 23500 },
-      { "size_g": 1000, "price_clp": 30000 }
+      {
+        "size_g": 250,
+        "price_clp": 13000
+      },
+      {
+        "size_g": 500,
+        "price_clp": 23500
+      },
+      {
+        "size_g": 1000,
+        "price_clp": 30000
+      }
     ]
   }
 ]

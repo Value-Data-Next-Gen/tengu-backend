@@ -77,6 +77,17 @@ def get_payment(payment_id: str) -> dict:
     return response["response"]
 
 
+def search_payments_by_external_reference(external_reference: str) -> list[dict]:
+    """Devuelve los payments asociados a un external_reference, ordenados por
+    date_created DESC (más reciente primero). Usado para verify manual cuando
+    el webhook se perdió."""
+    sdk = _sdk()
+    response = sdk.payment().search(filters={"external_reference": external_reference})
+    if response.get("status", 0) >= 400:
+        raise MercadoPagoError(f"MP search falló: {response.get('response', response)}")
+    return (response.get("response", {}) or {}).get("results", [])
+
+
 def init_point_for_environment(preference: dict) -> str:
     """Devuelve sandbox_init_point en test, init_point en live. Si el
     environment es 'test' pero la cuenta no es sandbox, igual cae al init_point."""

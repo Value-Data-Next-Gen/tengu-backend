@@ -5,6 +5,7 @@ modelo (ej. cover del Post, brochures, attachments). El cliente sube,
 recibe la URL `/uploads/<filename>` y la pega en el campo que corresponda.
 """
 import re
+import secrets
 import time
 from pathlib import Path
 
@@ -36,10 +37,11 @@ async def upload_image(file: UploadFile = File(...)) -> UploadOut:
         raise HTTPException(status_code=413, detail="Imagen demasiado grande (máx 5 MB)")
 
     ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}[file.content_type]
-    # Base: nombre original del archivo (sanitizado) + timestamp para cache-busting
+    # Base: nombre original del archivo (sanitizado) + timestamp + 6 chars hex
+    # para evitar colisión entre dos uploads en el mismo segundo.
     raw_base = Path(file.filename or "upload").stem
     safe_base = re.sub(r"[^a-z0-9-]+", "-", raw_base.lower()).strip("-") or "upload"
-    filename = f"{safe_base}-{int(time.time())}{ext}"
+    filename = f"{safe_base}-{int(time.time())}-{secrets.token_hex(3)}{ext}"
     target = Path(UPLOADS_DIR) / filename
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(contents)

@@ -1,4 +1,5 @@
 import re
+import secrets
 import shutil
 import time
 from pathlib import Path
@@ -175,8 +176,8 @@ async def upload_image(
 
     ext = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp"}[file.content_type]
     safe_slug = re.sub(r"[^a-z0-9-]", "", product.slug.lower())
-    # Timestamp suffix → URL única por upload. Evita que CDN/browser sirvan la versión vieja.
-    filename = f"{safe_slug}-{int(time.time())}{ext}"
+    # Timestamp + hex evitan colisión cuando hay dos uploads en el mismo segundo.
+    filename = f"{safe_slug}-{int(time.time())}-{secrets.token_hex(3)}{ext}"
     target = Path(UPLOADS_DIR) / filename
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_bytes(contents)
