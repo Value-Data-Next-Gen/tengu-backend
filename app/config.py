@@ -109,6 +109,11 @@ def assert_production_secrets() -> None:
             "JWT_SECRET no configurado en producción — "
             "setea la env var JWT_SECRET (string aleatorio largo) para que las sesiones persistan."
         )
+    if not settings.frontend_url.startswith("https://"):
+        # En prod los magic links + redirects de pago necesitan dominio HTTPS real.
+        raise RuntimeError(
+            f"FRONTEND_URL debe ser un URL https:// en producción. Valor actual: {settings.frontend_url!r}"
+        )
     if not settings.uploads_dir.startswith("/home/"):
         # En Azure App Service /home es la única zona persistente. Sin esto,
         # las imágenes subidas desde /admin se pierden en cada redeploy.

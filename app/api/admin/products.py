@@ -21,7 +21,7 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 class VariantUpdate(BaseModel):
-    price_clp: int | None = Field(default=None, ge=0)
+    price_clp: int | None = Field(default=None, gt=0)  # no aceptamos café gratis (consistente con VariantIn)
     stock_qty: int | None = Field(default=None, ge=0)
 
 

@@ -136,10 +136,11 @@ class OrderOut(BaseModel):
 
 
 class OrderCreatedOut(OrderOut):
-    """Variante de OrderOut que incluye el access_token. Solo se devuelve al
-    crear la orden — el frontend lo propaga a /thanks/{id}?token=... y nunca
-    se vuelve a exponer por API pública."""
-    access_token: str
+    """Variante de OrderOut que incluye el access_token. Se devuelve al
+    crear una orden (POST /api/orders) y al listar las del cliente logueado
+    (/api/auth/me/orders). Nullable porque hay órdenes legacy creadas antes
+    de que la columna existiera — el frontend muestra esas como no-linkables."""
+    access_token: str | None = None
 
 
 # --- Checkout ---

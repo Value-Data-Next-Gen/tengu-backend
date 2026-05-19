@@ -42,19 +42,30 @@ def _migrate_add_missing_columns() -> None:
         )
     if "shipping_mode" not in existing:
         statements.append("ALTER TABLE orders ADD COLUMN shipping_mode VARCHAR(20)")
+    backfill_access_tokens = False
     if "access_token" not in existing:
         statements.append("ALTER TABLE orders ADD COLUMN access_token VARCHAR(64)")
         statements.append(
             "CREATE INDEX IF NOT EXISTS ix_orders_access_token ON orders(access_token)"
         )
+        backfill_access_tokens = True
     if not statements:
         return
     with engine.begin() as conn:
         for sql in statements:
             conn.execute(text(sql))
-    # Backfill: las órdenes legacy quedan sin access_token (nullable). Como el
-    # endpoint público lo exige, sin token quedan ilegibles desde /thanks — pero
-    # tampoco se filtran. El admin las ve igual.
+    # Backfill: las órdenes legacy quedan con access_token=NULL al ALTER.
+    # Las rellenamos para que /cuenta y /thanks funcionen consistente. El token
+    # es un secreto razonable (el dueño es el único con el link).
+    if backfill_access_tokens:
+        from .models import Order, _gen_access_token
+        with engine.begin() as conn:
+            from sqlalchemy.orm import Session
+            with Session(bind=conn) as db:
+                legacy = db.query(Order).filter(Order.access_token.is_(None)).all()
+                for o in legacy:
+                    o.access_token = _gen_access_token()
+                db.commit()
 
 
 @asynccontextmanager
