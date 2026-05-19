@@ -370,6 +370,7 @@ class SiteSettingsOut(BaseModel):
     roast_day: str
     ship_days: str
     subscription_discount_pct: int
+    subscription_enabled: bool = True
     wholesale_min_kg: int
     wholesale_lead_msg: str
 
@@ -379,6 +380,7 @@ class SiteSettingsPatch(BaseModel):
     roast_day: str | None = Field(default=None, max_length=40)
     ship_days: str | None = Field(default=None, max_length=80)
     subscription_discount_pct: int | None = Field(default=None, ge=0, le=100)
+    subscription_enabled: bool | None = None
     wholesale_min_kg: int | None = Field(default=None, ge=1)
     wholesale_lead_msg: str | None = Field(default=None, max_length=500)
 

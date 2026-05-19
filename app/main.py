@@ -49,6 +49,13 @@ def _migrate_add_missing_columns() -> None:
             "CREATE INDEX IF NOT EXISTS ix_orders_access_token ON orders(access_token)"
         )
         backfill_access_tokens = True
+
+    # Migración para site_settings.subscription_enabled
+    if inspector.has_table("site_settings"):
+        ss_cols = {c["name"] for c in inspector.get_columns("site_settings")}
+        if "subscription_enabled" not in ss_cols:
+            statements.append("ALTER TABLE site_settings ADD COLUMN subscription_enabled BOOLEAN DEFAULT 1")
+
     if not statements:
         return
     with engine.begin() as conn:

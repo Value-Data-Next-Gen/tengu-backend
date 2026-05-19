@@ -311,6 +311,10 @@ class SiteSettings(Base):
     ship_days: Mapped[str] = mapped_column(String(80), default="martes y viernes")
     # Suscripción
     subscription_discount_pct: Mapped[int] = mapped_column(Integer, default=10)
+    # Si false, /suscripcion muestra "próximamente" + WhatsApp en vez del form,
+    # y se oculta del header/footer. Útil mientras Webpay/Khipu no estén activos
+    # para los cobros recurrentes.
+    subscription_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     # Wholesale / HORECA
     wholesale_min_kg: Mapped[int] = mapped_column(Integer, default=5)
     wholesale_lead_msg: Mapped[str] = mapped_column(
