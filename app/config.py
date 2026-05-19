@@ -39,10 +39,15 @@ class Settings(BaseSettings):
 
     # --- Mercado Pago credentials (Checkout Pro) ---
     # Sacar en https://www.mercadopago.cl/developers/panel/app → Credenciales.
-    # TEST-... para sandbox, APP_USR-... para producción.
-    # Si queda vacío, /api/checkout/mercadopago/* responde 503.
-    mp_access_token: str = ""
-    mp_environment: str = "test"  # "test" usa sandbox_init_point, "live" usa init_point
+    # 4 valores: Access Token + Public Key, en sandbox y producción.
+    # En sandbox los tokens empiezan con TEST-..., en prod con APP_USR-...
+    # mp_environment="test" → usa mp_tk_test (y devuelve sandbox_init_point).
+    # mp_environment="live" → usa mp_tk_prod (y devuelve init_point).
+    mp_tk_test: str = ""
+    mp_pk_test: str = ""
+    mp_tk_prod: str = ""
+    mp_pk_prod: str = ""
+    mp_environment: str = "test"
 
     # Shipping costs (CLP).
     shipping_rm_clp: int = 3500
@@ -78,6 +83,14 @@ class Settings(BaseSettings):
     @property
     def admin_emails_list(self) -> list[str]:
         return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
+
+    @property
+    def mp_access_token(self) -> str:
+        return self.mp_tk_prod if self.mp_environment.lower() == "live" else self.mp_tk_test
+
+    @property
+    def mp_public_key(self) -> str:
+        return self.mp_pk_prod if self.mp_environment.lower() == "live" else self.mp_pk_test
 
 
 settings = Settings()

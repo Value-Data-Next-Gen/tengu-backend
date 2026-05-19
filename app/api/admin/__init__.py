@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from . import auth, categories, coffee_subscriptions, orders, posts, products, reviews, site, subscriptions
+from . import auth, categories, coffee_subscriptions, orders, posts, products, reviews, site, subscriptions, uploads
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 router.include_router(auth.router)
@@ -12,3 +12,4 @@ router.include_router(coffee_subscriptions.router)
 router.include_router(reviews.router)
 router.include_router(site.router)
 router.include_router(posts.router)
+router.include_router(uploads.router)
