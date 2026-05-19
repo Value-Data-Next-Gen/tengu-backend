@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     khipu_api_key: str = ""
     khipu_api_base: str = "https://payment-api.khipu.com/v3"
 
+    # --- Mercado Pago credentials (Checkout Pro) ---
+    # Sacar en https://www.mercadopago.cl/developers/panel/app → Credenciales.
+    # TEST-... para sandbox, APP_USR-... para producción.
+    # Si queda vacío, /api/checkout/mercadopago/* responde 503.
+    mp_access_token: str = ""
+    mp_environment: str = "test"  # "test" usa sandbox_init_point, "live" usa init_point
+
     # Shipping costs (CLP).
     shipping_rm_clp: int = 3500
     shipping_regiones_clp: int = 5500

@@ -143,6 +143,10 @@ class Order(Base):
     khipu_payment_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     khipu_response: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
+    mp_preference_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    mp_payment_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    mp_response: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     admin_notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     tracking_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
 

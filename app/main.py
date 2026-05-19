@@ -50,6 +50,14 @@ def _migrate_add_missing_columns() -> None:
             "CREATE INDEX IF NOT EXISTS ix_orders_access_token ON orders(access_token)"
         )
         backfill_access_tokens = True
+    if "mp_preference_id" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN mp_preference_id VARCHAR(120)")
+        statements.append("CREATE INDEX IF NOT EXISTS ix_orders_mp_preference_id ON orders(mp_preference_id)")
+    if "mp_payment_id" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN mp_payment_id VARCHAR(120)")
+        statements.append("CREATE INDEX IF NOT EXISTS ix_orders_mp_payment_id ON orders(mp_payment_id)")
+    if "mp_response" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN mp_response JSON")
 
     # Migración para site_settings.subscription_enabled / customer_accounts_enabled
     if inspector.has_table("site_settings"):

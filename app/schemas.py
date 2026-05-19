@@ -92,7 +92,7 @@ class OrderIn(BaseModel):
         return _validate_chilean_rut(v)
     # 'bank_transfer' = BanchilePagos manual (queda pending hasta confirmación).
     # 'webpay'/'khipu' se setea desde /api/checkout/*/init.
-    payment_method: Literal["bank_transfer", "webpay", "khipu"] | None = None
+    payment_method: Literal["bank_transfer", "webpay", "khipu", "mercadopago"] | None = None
     items: list[OrderItemIn] = Field(min_length=1, max_length=20)
 
 
@@ -491,3 +491,8 @@ class KhipuInitOut(BaseModel):
     payment_id: str
     payment_url: str
     simplified_transfer_url: str | None = None
+
+
+class MercadoPagoInitOut(BaseModel):
+    preference_id: str
+    init_point: str  # URL para redirigir al cliente
