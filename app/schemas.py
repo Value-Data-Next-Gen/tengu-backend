@@ -401,6 +401,49 @@ class ShippingRatePatch(BaseModel):
     price_clp: int = Field(ge=0)
 
 
+class PostOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    slug: str
+    title: str
+    excerpt: str
+    meta_description: str
+    cover: str
+    published_at: str
+    reading_minutes: int
+    author: str
+    tags: list[str]
+    body: str
+    is_published: bool
+
+
+class PostIn(BaseModel):
+    slug: str = Field(min_length=2, max_length=120, pattern=r"^[a-z0-9-]+$")
+    title: str = Field(min_length=2, max_length=200)
+    excerpt: str = Field(min_length=10, max_length=500)
+    meta_description: str = Field(default="", max_length=200)
+    cover: str = Field(default="", max_length=300)
+    published_at: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    reading_minutes: int = Field(gt=0, le=120, default=5)
+    author: str = Field(default="Equipo Tengu", max_length=100)
+    tags: list[str] = Field(default_factory=list)
+    body: str = Field(min_length=10, max_length=50000)
+    is_published: bool = True
+
+
+class PostPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=200)
+    excerpt: str | None = Field(default=None, min_length=10, max_length=500)
+    meta_description: str | None = Field(default=None, max_length=200)
+    cover: str | None = Field(default=None, max_length=300)
+    published_at: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+    reading_minutes: int | None = Field(default=None, gt=0, le=120)
+    author: str | None = Field(default=None, max_length=100)
+    tags: list[str] | None = None
+    body: str | None = Field(default=None, min_length=10, max_length=50000)
+    is_published: bool | None = None
+
+
 class ShippingQuoteIn(BaseModel):
     region: str = Field(min_length=1, max_length=120)
     comuna: str | None = Field(default=None, max_length=120)

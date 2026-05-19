@@ -5,11 +5,12 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .models import Category, Product, Variant
+from .models import Category, Post, Product, Variant
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 SEED_PATH = BACKEND_ROOT / "seed" / "products.json"
+SEED_POSTS_PATH = BACKEND_ROOT / "seed" / "posts.json"
 SEED_IMAGES = BACKEND_ROOT / "seed" / "images"
 UPLOADS_DIR = Path(settings.uploads_dir) if settings.uploads_dir else BACKEND_ROOT / "uploads"
 
@@ -71,5 +72,33 @@ def seed_products(db: Session) -> int:
         )
         db.add(product)
 
+    db.commit()
+    return len(data)
+
+
+def seed_posts(db: Session) -> int:
+    """Carga los posts iniciales desde seed/posts.json si la tabla está vacía.
+    El JSON sale de exportar frontend/src/data/blog.ts (formato camelCase TS,
+    mapeamos a snake_case del modelo)."""
+    if db.query(Post).count() > 0:
+        return 0
+    if not SEED_POSTS_PATH.exists():
+        return 0
+    data = json.loads(SEED_POSTS_PATH.read_text(encoding="utf-8"))
+    for entry in data:
+        post = Post(
+            slug=entry["slug"],
+            title=entry["title"],
+            excerpt=entry["excerpt"],
+            meta_description=entry.get("metaDescription", ""),
+            cover=entry.get("cover", ""),
+            published_at=entry["publishedAt"],
+            reading_minutes=entry.get("readingMinutes", 5),
+            author=entry.get("author", "Equipo Tengu"),
+            tags=entry.get("tags", []),
+            body=entry["body"],
+            is_published=True,
+        )
+        db.add(post)
     db.commit()
     return len(data)

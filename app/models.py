@@ -370,6 +370,35 @@ class Comuna(Base):
     name: Mapped[str] = mapped_column(String(120), index=True)
 
 
+class Post(Base):
+    """Post del blog. Migrado desde frontend/src/data/blog.ts a tabla
+    persistente para edición desde /admin. La columna `cover` guarda la
+    URL/path relativo a la imagen (ej. '/uploads/rwanda-natural.jpg').
+    `body` es markdown."""
+    __tablename__ = "posts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    excerpt: Mapped[str] = mapped_column(String(500))
+    meta_description: Mapped[str] = mapped_column(String(200), default="")
+    cover: Mapped[str] = mapped_column(String(300), default="")
+    published_at: Mapped[str] = mapped_column(String(20))  # YYYY-MM-DD
+    reading_minutes: Mapped[int] = mapped_column(Integer, default=5)
+    author: Mapped[str] = mapped_column(String(100), default="Equipo Tengu")
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    body: Mapped[str] = mapped_column(String(50000))  # markdown
+    is_published: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class HorecaLead(Base):
     __tablename__ = "horeca_leads"
 
