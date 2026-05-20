@@ -1,11 +1,14 @@
 import hmac
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Customer, Order, OrderItem, Product, ShippingMethod
 from ..schemas import OrderCreatedOut, OrderIn, OrderOut
+from ..services.customer_auth import optional_customer
+from ..services.order_emails import send_order_created_email
+from ..services.rate_limit import client_ip, orders_create_limiter
 from ..services.shipping import quote_shipping
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -41,7 +44,10 @@ def _upsert_customer(db: Session, payload: OrderIn) -> Customer:
 
 
 @router.post("", response_model=OrderCreatedOut, status_code=201)
-def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
+def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_db)) -> Order:
+    # Anti-DoS: 10 órdenes/min por IP. Suficiente para flujos legítimos
+    # (un cliente raramente crea 2 órdenes en 60s) y bloquea scripts.
+    orders_create_limiter.check(client_ip(request))
     if payload.shipping_method != ShippingMethod.pickup.value:
         if not payload.shipping_address or not payload.shipping_comuna:
             raise HTTPException(status_code=422, detail="Falta dirección o comuna para el despacho.")
@@ -124,22 +130,34 @@ def create_order(payload: OrderIn, db: Session = Depends(get_db)) -> Order:
     db.add(order)
     db.commit()
     db.refresh(order)
+    # Mail de confirmación al cliente (idempotente). En modo __console__ sólo logea.
+    send_order_created_email(order)
+    db.commit()
     return order
 
 
 @router.get("/{order_id}", response_model=OrderOut)
 def get_order(
     order_id: int,
-    token: str = Query(..., min_length=8, max_length=64),
+    token: str | None = Query(None, min_length=8, max_length=64),
     db: Session = Depends(get_db),
+    customer: Customer | None = Depends(optional_customer),
 ) -> Order:
-    """Lectura pública de una orden. Exige el access_token entregado al crearla
-    (POST /api/orders) para evitar enumeración por order_id."""
+    """Lectura de una orden. Dos modos de auth aceptados:
+
+    - JWT customer (Authorization: Bearer ...) → orden debe pertenecer a ese
+      customer_email. Es el camino seguro para /cuenta/orders.
+    - access_token en query (legacy) → secret-link entregado en /thanks. Sirve
+      para el flujo guest sin login.
+    """
     order = db.get(Order, order_id)
-    # Legacy orders sin token también devuelven 404 acá (no se leen desde
-    # /thanks); el admin las sigue viendo por su propio endpoint.
-    if not order or not order.access_token:
+    if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
-    if not hmac.compare_digest(order.access_token, token):
-        raise HTTPException(status_code=404, detail="Orden no encontrada")
-    return order
+
+    if customer and order.customer_email.lower() == customer.email.lower():
+        return order
+
+    if token and order.access_token and hmac.compare_digest(order.access_token, token):
+        return order
+
+    raise HTTPException(status_code=404, detail="Orden no encontrada")

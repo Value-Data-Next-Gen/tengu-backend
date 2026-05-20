@@ -79,3 +79,17 @@ def require_customer(request: Request, db: Session = Depends(get_db)) -> Custome
     if not customer:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Cuenta no existe")
     return customer
+
+
+def optional_customer(request: Request, db: Session = Depends(get_db)) -> Customer | None:
+    """Devuelve el Customer si hay Bearer JWT válido, None si no.
+    No falla si no hay sesión — útil para endpoints que aceptan auth o token público."""
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    token = auth.split(" ", 1)[1].strip()
+    payload = decode_customer_jwt(token)
+    if not payload:
+        return None
+    email = payload.get("sub")
+    return db.query(Customer).filter(Customer.email == email).first()

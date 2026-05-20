@@ -156,6 +156,13 @@ class Order(Base):
     paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     shipped_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
+    # Idempotencia: timestamps de side-effects que sólo deben ocurrir UNA vez
+    # por orden, aunque el webhook MP/Khipu reintente. Si no es None, el
+    # efecto ya se aplicó y no se repite.
+    stock_decremented_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notification_created_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    notification_paid_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     items: Mapped[list["OrderItem"]] = relationship(
         back_populates="order", cascade="all, delete-orphan"
     )

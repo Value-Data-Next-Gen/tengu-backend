@@ -11,6 +11,7 @@ from ..db import get_db
 from ..models import Order, OrderStatus
 from ..schemas import CheckoutInitIn, KhipuInitOut, MercadoPagoInitOut, WebpayInitOut
 from ..services import khipu, mercadopago, webpay
+from ..services.order_lifecycle import mark_order_paid
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
 
@@ -107,8 +108,7 @@ def webpay_return(
     status_str = response.get("status") if isinstance(response, dict) else None
 
     if response_code == 0 and status_str == "AUTHORIZED":
-        order.status = OrderStatus.paid.value
-        order.paid_at = datetime.now(timezone.utc)
+        mark_order_paid(order, db)
         result = "paid"
     else:
         order.status = OrderStatus.failed.value
@@ -192,11 +192,10 @@ async def khipu_notify(request: Request, db: Session = Depends(get_db)) -> dict:
 
     order.khipu_response = payment
     if payment.get("status") == "done":
-        if order.status == OrderStatus.pending.value:
-            order.status = OrderStatus.paid.value
-            order.paid_at = datetime.now(timezone.utc)
+        mark_order_paid(order, db)
     elif payment.get("status") in {"expired", "rejected"}:
-        order.status = OrderStatus.failed.value
+        if order.status == OrderStatus.pending.value:
+            order.status = OrderStatus.failed.value
 
     db.commit()
     return {"ok": True, "status": payment.get("status")}
@@ -230,9 +229,8 @@ def khipu_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
     order.khipu_response = payment
-    if payment.get("status") == "done" and order.status == OrderStatus.pending.value:
-        order.status = OrderStatus.paid.value
-        order.paid_at = datetime.now(timezone.utc)
+    if payment.get("status") == "done":
+        mark_order_paid(order, db)
     elif payment.get("status") in {"expired", "rejected"} and order.status == OrderStatus.pending.value:
         order.status = OrderStatus.failed.value
 
@@ -355,14 +353,20 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
     # CLP no tiene decimales pero por redondeo o descuento puede llegar "14999.99".
     # Aceptamos tolerancia ±2 CLP para evitar amount_mismatch por float-rounding.
     paid_amount = round(float(payment.get("transaction_amount") or 0))
-    if abs(paid_amount - order.total_clp) > 2:
+    amount_ok = abs(paid_amount - order.total_clp) <= 2
+    if not amount_ok:
+        # Mismatch fuera de tolerancia: NO marcar paid. Bloquear despacho
+        # marcando failed + nota para admin. Si era un approved real con monto
+        # raro (descuento aplicado por MP), admin puede revisar y forzar paid.
         order.mp_response = payment
-        # Cap el admin_notes a 1000 chars para no explotar la columna en reintentos.
         existing = order.admin_notes or ""
+        tag = f"[MP] amount_mismatch: recibido {paid_amount} ≠ esperado {order.total_clp}"
         if "[MP] amount_mismatch" not in existing:
-            order.admin_notes = (existing + f"\n[MP] amount_mismatch: recibido {paid_amount} ≠ esperado {order.total_clp}").strip()[:1000]
+            order.admin_notes = (existing + "\n" + tag).strip()[:1000]
+        if order.status == OrderStatus.pending.value:
+            order.status = OrderStatus.failed.value
         db.commit()
-        return {"ok": True, "warning": "amount_mismatch"}
+        return {"ok": True, "warning": "amount_mismatch", "blocked": True}
 
     order.mp_payment_id = str(payment.get("id", ""))
     order.mp_response = payment
@@ -371,12 +375,10 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
     # Idempotencia: si la orden ya está paid o canceled/failed por un webhook
     # previo, NO sobrescribimos. Refund/charged_back posteriores no degradan
     # el estado paid (requieren tratamiento manual + emisión de devolución).
-    if order.status == OrderStatus.pending.value:
-        if status_mp == "approved":
-            order.status = OrderStatus.paid.value
-            order.paid_at = datetime.now(timezone.utc)
-        elif status_mp in {"rejected", "cancelled"}:
-            order.status = OrderStatus.failed.value
+    if status_mp == "approved":
+        mark_order_paid(order, db)
+    elif order.status == OrderStatus.pending.value and status_mp in {"rejected", "cancelled"}:
+        order.status = OrderStatus.failed.value
     elif order.status == OrderStatus.paid.value and status_mp in {"refunded", "charged_back"}:
         # Pago revertido post-aprobación: dejamos nota para revisión admin pero
         # no automatizamos el cambio de estado (necesita refund flow + stock).
@@ -430,9 +432,8 @@ def mercadopago_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
     # Si MP confirma un pago aprobado con monto correcto, marcamos paid
     # aunque la orden esté en "failed" — un verify anterior buggeado pudo
     # haberla degradado tomando un intento rechazado. paid manda sobre failed.
-    if status_mp == "approved" and amount_ok and order.status != OrderStatus.paid.value:
-        order.status = OrderStatus.paid.value
-        order.paid_at = datetime.now(timezone.utc)
+    if status_mp == "approved" and amount_ok:
+        mark_order_paid(order, db, allow_from_failed=True)
     elif order.status == OrderStatus.pending.value and status_mp in {"rejected", "cancelled"}:
         order.status = OrderStatus.failed.value
     db.commit()

@@ -58,6 +58,12 @@ def _migrate_add_missing_columns() -> None:
         statements.append("CREATE INDEX IF NOT EXISTS ix_orders_mp_payment_id ON orders(mp_payment_id)")
     if "mp_response" not in existing:
         statements.append("ALTER TABLE orders ADD COLUMN mp_response JSON")
+    if "stock_decremented_at" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN stock_decremented_at DATETIME")
+    if "notification_created_sent_at" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN notification_created_sent_at DATETIME")
+    if "notification_paid_sent_at" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN notification_paid_sent_at DATETIME")
 
     # Migración para site_settings.subscription_enabled / customer_accounts_enabled
     if inspector.has_table("site_settings"):
