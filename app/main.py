@@ -64,6 +64,10 @@ def _migrate_add_missing_columns() -> None:
         statements.append("ALTER TABLE orders ADD COLUMN notification_created_sent_at DATETIME")
     if "notification_paid_sent_at" not in existing:
         statements.append("ALTER TABLE orders ADD COLUMN notification_paid_sent_at DATETIME")
+    if "client_ip" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN client_ip VARCHAR(64)")
+    if "user_agent" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN user_agent VARCHAR(300)")
 
     # Migración para site_settings.subscription_enabled / customer_accounts_enabled
     if inspector.has_table("site_settings"):

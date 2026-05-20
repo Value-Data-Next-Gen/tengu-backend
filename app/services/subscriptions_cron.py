@@ -13,10 +13,11 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import SessionLocal
-from ..models import CoffeeSubscription
+from ..models import CoffeeSubscription, Order, OrderStatus
 from .email import send_email
 
 POLL_INTERVAL_SECONDS = 3600  # 1 hora
+STALE_ORDER_HOURS = 24  # pending sin payment → canceled
 
 
 def _run_due_subscriptions(db: Session) -> int:
@@ -61,14 +62,49 @@ def _run_due_subscriptions(db: Session) -> int:
     return len(processed)
 
 
+def _cancel_stale_pending_orders(db: Session) -> int:
+    """Cancela órdenes pending con >24h sin payment iniciado.
+
+    "Sin payment iniciado" = NO tiene mp_payment_id ni khipu_payment_id ni
+    webpay_token. Esas órdenes son típicamente spam o usuarios que llenaron
+    el form y se fueron. Las dejamos como 'canceled' (no se borran para no
+    perder evidencia anti-chargeback ni huella de spam).
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=STALE_ORDER_HOURS)
+    stale = (
+        db.query(Order)
+        .filter(
+            Order.status == OrderStatus.pending.value,
+            Order.created_at < cutoff,
+            Order.mp_payment_id.is_(None),
+            Order.khipu_payment_id.is_(None),
+            Order.webpay_token.is_(None),
+        )
+        .all()
+    )
+    for o in stale:
+        o.status = OrderStatus.canceled.value
+        tag = "[auto] cancelada por >24h sin pago iniciado"
+        existing = o.admin_notes or ""
+        if tag not in existing:
+            o.admin_notes = (existing + "\n" + tag).strip()[:1000]
+    if stale:
+        db.commit()
+    return len(stale)
+
+
 async def subscription_cron_loop():
-    """Loop asyncio que corre indefinidamente procesando suscripciones."""
+    """Loop asyncio que corre indefinidamente procesando suscripciones
+    y limpiando órdenes pending muertas."""
     while True:
         try:
             with SessionLocal() as db:
                 count = _run_due_subscriptions(db)
                 if count > 0:
                     print(f"[subs-cron] procesadas {count} suscripción(es)")
+                cancelled = _cancel_stale_pending_orders(db)
+                if cancelled > 0:
+                    print(f"[orders-cleanup] canceladas {cancelled} orden(es) pending stale")
         except Exception as e:
             print(f"[subs-cron] error: {e}")
         await asyncio.sleep(POLL_INTERVAL_SECONDS)

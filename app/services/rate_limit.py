@@ -62,4 +62,7 @@ def client_ip(request: Request) -> str:
 
 # Limiters instanciados arriba para que sean singletons del proceso.
 orders_create_limiter = RateLimiter(max_calls=10, window_seconds=60)
+# Por email: 3 órdenes/hora. Más generoso que el de IP porque un cliente
+# real puede crear orden, cancelar y reintentar; pero corta abuso/spam.
+orders_per_email_limiter = RateLimiter(max_calls=3, window_seconds=3600)
 auth_request_link_limiter = RateLimiter(max_calls=5, window_seconds=300)

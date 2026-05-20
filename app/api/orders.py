@@ -8,7 +8,7 @@ from ..models import Customer, Order, OrderItem, Product, ShippingMethod
 from ..schemas import OrderCreatedOut, OrderIn, OrderOut
 from ..services.customer_auth import optional_customer
 from ..services.order_emails import send_order_created_email
-from ..services.rate_limit import client_ip, orders_create_limiter
+from ..services.rate_limit import client_ip, orders_create_limiter, orders_per_email_limiter
 from ..services.shipping import quote_shipping
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
@@ -45,9 +45,11 @@ def _upsert_customer(db: Session, payload: OrderIn) -> Customer:
 
 @router.post("", response_model=OrderCreatedOut, status_code=201)
 def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_db)) -> Order:
-    # Anti-DoS: 10 órdenes/min por IP. Suficiente para flujos legítimos
-    # (un cliente raramente crea 2 órdenes en 60s) y bloquea scripts.
+    # Anti-DoS por IP: 10 órdenes/min.
     orders_create_limiter.check(client_ip(request))
+    # Anti-spam por email: 3 órdenes/hora. Bots y formularios de prueba
+    # repiten email; corta antes de inflar la DB con basura.
+    orders_per_email_limiter.check(payload.customer_email.lower().strip())
     if payload.shipping_method != ShippingMethod.pickup.value:
         if not payload.shipping_address or not payload.shipping_comuna:
             raise HTTPException(status_code=422, detail="Falta dirección o comuna para el despacho.")
@@ -111,6 +113,8 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
     is_pickup = payload.shipping_method == ShippingMethod.pickup.value
     order = Order(
         customer_id=customer.id,
+        client_ip=client_ip(request)[:64],
+        user_agent=(request.headers.get("user-agent") or "")[:300],
         customer_email=payload.customer_email.lower().strip(),
         customer_name=payload.customer_name.strip(),
         customer_phone=payload.customer_phone.strip(),

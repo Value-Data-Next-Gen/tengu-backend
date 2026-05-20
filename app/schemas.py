@@ -5,6 +5,20 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
+# Dominios de email desechables conocidos. Lista corta de los más usados
+# para spam/throwaway; no pretende ser exhaustiva, solo subir la fricción.
+# Si crece, mover a un set externo (txt/JSON) cargado al startup.
+_DISPOSABLE_DOMAINS = frozenset({
+    "mailinator.com", "guerrillamail.com", "guerrillamail.net", "10minutemail.com",
+    "10minutemail.net", "tempmail.com", "temp-mail.org", "throwawaymail.com",
+    "yopmail.com", "trashmail.com", "sharklasers.com", "getnada.com", "nada.email",
+    "fakeinbox.com", "fake-mail.net", "maildrop.cc", "dispostable.com",
+    "mintemail.com", "mt2015.com", "tempinbox.com", "emailondeck.com",
+    "spamgourmet.com", "mohmal.com", "tempemail.net", "burnermail.io",
+    "33mail.com", "anonbox.net", "mailcatch.com", "spambox.us",
+    "spam4.me", "0wnd.net", "tmpmail.org", "trbvm.com", "mvrht.com",
+})
+
 _RUT_CLEANUP = re.compile(r"[.\s]")
 
 # Teléfono chileno: acepta variaciones comunes que tipea un usuario real:
@@ -105,11 +119,31 @@ class OrderIn(BaseModel):
     shipping_comuna: str | None = Field(default=None, max_length=120)
     shipping_region: str | None = Field(default=None, max_length=120)
     shipping_notes: str | None = Field(default=None, max_length=500)
+    # Honeypot: campo invisible en el form (display:none). Humanos lo dejan
+    # vacío; bots que llenan todos los inputs lo completan y se autobannean.
+    # Nombre genérico tipo "website" para que el bot no lo detecte.
+    website: str | None = Field(default=None, max_length=200, exclude=True)
 
     @field_validator("customer_rut")
     @classmethod
     def _rut_valid(cls, v: str) -> str:
         return _validate_chilean_rut(v)
+
+    @field_validator("customer_email")
+    @classmethod
+    def _email_no_disposable(cls, v: str) -> str:
+        domain = v.split("@", 1)[1].lower() if "@" in v else ""
+        if domain in _DISPOSABLE_DOMAINS:
+            raise ValueError("No aceptamos emails desechables. Usá tu correo real.")
+        return v
+
+    @field_validator("website")
+    @classmethod
+    def _website_must_be_empty(cls, v: str | None) -> str | None:
+        # Si llegó algo en este campo, es un bot.
+        if v:
+            raise ValueError("Solicitud rechazada.")
+        return v
 
     @field_validator("customer_phone")
     @classmethod

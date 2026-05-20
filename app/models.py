@@ -150,6 +150,11 @@ class Order(Base):
     admin_notes: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     tracking_code: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
+    # Evidencia anti-chargeback: capturados al crear la orden. Útil para
+    # disputas con MP/Banco ("este pedido llegó desde IP X con UA Y").
+    client_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
