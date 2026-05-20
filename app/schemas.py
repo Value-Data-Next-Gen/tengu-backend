@@ -7,6 +7,26 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 _RUT_CLEANUP = re.compile(r"[.\s]")
 
+# Teléfono chileno: acepta variaciones comunes que tipea un usuario real:
+#   +56 9 1234 5678 / +56912345678 / 56912345678 / 9 1234 5678 / 91234567
+#   Normaliza a '+56 9 XXXX XXXX'. Rechaza fijos (Blue Express necesita móvil).
+_PHONE_DIGITS = re.compile(r"\D+")
+
+
+def _validate_chilean_phone(value: str) -> str:
+    digits = _PHONE_DIGITS.sub("", value or "")
+    # Quitar prefijo país si vino
+    if digits.startswith("56"):
+        digits = digits[2:]
+    if digits.startswith("0"):
+        digits = digits[1:]
+    # Móvil chileno: 9 + 8 dígitos = 9 dígitos total
+    if len(digits) != 9 or not digits.startswith("9"):
+        raise ValueError(
+            "Teléfono inválido. Usá formato móvil chileno: +56 9 XXXX XXXX"
+        )
+    return f"+56 9 {digits[1:5]} {digits[5:]}"
+
 
 def _validate_chilean_rut(value: str) -> str:
     """Valida y normaliza un RUT chileno. Acepta '12.345.678-K', '12345678-k',
@@ -90,6 +110,11 @@ class OrderIn(BaseModel):
     @classmethod
     def _rut_valid(cls, v: str) -> str:
         return _validate_chilean_rut(v)
+
+    @field_validator("customer_phone")
+    @classmethod
+    def _phone_valid(cls, v: str) -> str:
+        return _validate_chilean_phone(v)
     # 'bank_transfer' = BanchilePagos manual (queda pending hasta confirmación).
     # 'webpay'/'khipu' se setea desde /api/checkout/*/init.
     payment_method: Literal["bank_transfer", "webpay", "khipu", "mercadopago"] | None = None
@@ -173,6 +198,11 @@ class SubscriptionIn(BaseModel):
     @classmethod
     def _rut_valid(cls, v: str) -> str:
         return _validate_chilean_rut(v)
+
+    @field_validator("customer_phone")
+    @classmethod
+    def _phone_valid(cls, v: str) -> str:
+        return _validate_chilean_phone(v)
 
 
 class SubscriptionOut(BaseModel):

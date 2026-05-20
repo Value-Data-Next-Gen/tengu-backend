@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     smtp_from_email: str = "Tengu Roastery <hola@tenguroastery.cl>"
     smtp_use_tls: bool = True
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property
     def cors_origins_list(self) -> list[str]:
