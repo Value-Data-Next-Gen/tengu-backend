@@ -123,6 +123,21 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def _no_store_api_responses(request, call_next):
+    """Fuerza Cache-Control no-store en /api/*. Netlify proxea estos paths
+    desde el dominio del frontend; sin este header su CDN puede cachear
+    respuestas GET y un cambio de precio en /admin no se ve hasta TTL.
+
+    /uploads queda excluido (lo cachea CachedStaticFiles para max-age=86400).
+    """
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
 # Cache agresivo en /uploads para que Netlify cachee al edge. El admin UI ya
 # agrega ?v=timestamp al re-subir, así que el cliente forzar refresh cuando
 # importa; el público lo ve estable durante 1 día.
