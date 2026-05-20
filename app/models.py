@@ -350,6 +350,19 @@ class SiteSettings(Base):
         default="Cotización mayorista personalizada desde 5 kg. Filtrado o espresso a tu medida.",
     )
 
+    # Barra superior anunciante. Si announcement_enabled=True y no venció,
+    # reemplaza los 3 mensajes default (envío gratis / tueste / despacho)
+    # por el mensaje custom — útil para eventos puntuales: Black Friday,
+    # CyberDay, fin de semana de Pink Bourbon, etc.
+    announcement_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    announcement_text: Mapped[str] = mapped_column(String(200), default="")
+    announcement_link_url: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    announcement_link_label: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # Hex colors. Defaults: bg=tengu-coral (#E63946), text=cream (#F5F1EA).
+    announcement_bg_color: Mapped[str] = mapped_column(String(20), default="#E63946")
+    announcement_text_color: Mapped[str] = mapped_column(String(20), default="#F5F1EA")
+    announcement_expires_at: Mapped[str | None] = mapped_column(String(20), nullable=True)  # YYYY-MM-DD
+
     # Promo popup. Si promo_enabled=True y no venció, muestra el modal en
     # vez del NewsletterPopup. Pensado para "Oferta del mes" rotativa.
     promo_enabled: Mapped[bool] = mapped_column(Boolean, default=False)

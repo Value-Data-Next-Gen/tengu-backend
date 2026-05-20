@@ -93,6 +93,14 @@ def _migrate_add_missing_columns() -> None:
             statements.append("ALTER TABLE site_settings ADD COLUMN subscription_enabled BOOLEAN DEFAULT 1")
         if "customer_accounts_enabled" not in ss_cols:
             statements.append("ALTER TABLE site_settings ADD COLUMN customer_accounts_enabled BOOLEAN DEFAULT 0")
+        if "announcement_enabled" not in ss_cols:
+            statements.append("ALTER TABLE site_settings ADD COLUMN announcement_enabled BOOLEAN DEFAULT 0")
+            statements.append("ALTER TABLE site_settings ADD COLUMN announcement_text VARCHAR(200) DEFAULT ''")
+            statements.append("ALTER TABLE site_settings ADD COLUMN announcement_link_url VARCHAR(300)")
+            statements.append("ALTER TABLE site_settings ADD COLUMN announcement_link_label VARCHAR(60)")
+            statements.append("ALTER TABLE site_settings ADD COLUMN announcement_bg_color VARCHAR(20) DEFAULT '#E63946'")
+            statements.append("ALTER TABLE site_settings ADD COLUMN announcement_text_color VARCHAR(20) DEFAULT '#F5F1EA'")
+            statements.append("ALTER TABLE site_settings ADD COLUMN announcement_expires_at VARCHAR(20)")
         if "promo_enabled" not in ss_cols:
             statements.append("ALTER TABLE site_settings ADD COLUMN promo_enabled BOOLEAN DEFAULT 0")
             statements.append("ALTER TABLE site_settings ADD COLUMN promo_badge VARCHAR(40) DEFAULT 'OFERTA DEL MES'")

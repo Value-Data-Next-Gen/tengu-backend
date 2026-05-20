@@ -486,6 +486,14 @@ class SiteSettingsOut(BaseModel):
     customer_accounts_enabled: bool = False
     wholesale_min_kg: int
     wholesale_lead_msg: str
+    # Announcement bar superior
+    announcement_enabled: bool = False
+    announcement_text: str = ""
+    announcement_link_url: str | None = None
+    announcement_link_label: str | None = None
+    announcement_bg_color: str = "#E63946"
+    announcement_text_color: str = "#F5F1EA"
+    announcement_expires_at: str | None = None
     # Promo popup
     promo_enabled: bool = False
     promo_badge: str = "OFERTA DEL MES"
@@ -508,6 +516,13 @@ class SiteSettingsPatch(BaseModel):
     customer_accounts_enabled: bool | None = None
     wholesale_min_kg: int | None = Field(default=None, ge=1)
     wholesale_lead_msg: str | None = Field(default=None, max_length=500)
+    announcement_enabled: bool | None = None
+    announcement_text: str | None = Field(default=None, max_length=200)
+    announcement_link_url: str | None = Field(default=None, max_length=300)
+    announcement_link_label: str | None = Field(default=None, max_length=60)
+    announcement_bg_color: str | None = Field(default=None, max_length=20)
+    announcement_text_color: str | None = Field(default=None, max_length=20)
+    announcement_expires_at: str | None = Field(default=None, max_length=20)
     promo_enabled: bool | None = None
     promo_badge: str | None = Field(default=None, max_length=40)
     promo_title: str | None = Field(default=None, max_length=120)
