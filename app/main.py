@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import inspect, text
 
 from .api import auth as auth_api
+from .api import cart_events as cart_events_api
 from .api import categories as categories_api
 from .api import checkout as checkout_api
 from .api import horeca as horeca_api
@@ -163,6 +164,7 @@ app.include_router(posts_api.router)
 app.include_router(categories_api.router)
 app.include_router(newsletter_api.router)
 app.include_router(orders_api.router)
+app.include_router(cart_events_api.router)
 app.include_router(checkout_api.router)
 app.include_router(horeca_api.router)
 app.include_router(subscriptions_api.router)

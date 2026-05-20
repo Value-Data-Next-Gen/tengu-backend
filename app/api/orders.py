@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..models import Customer, Order, OrderItem, Product, ShippingMethod
+from ..models import AbandonedCart, Customer, Order, OrderItem, Product, ShippingMethod
 from ..schemas import OrderCreatedOut, OrderIn, OrderOut
 from ..services.customer_auth import optional_customer
 from ..services.order_emails import send_order_created_email
@@ -134,6 +134,16 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
     db.add(order)
     db.commit()
     db.refresh(order)
+    # Marcar el abandoned cart (si había) como recovered. Idempotente.
+    cart = (
+        db.query(AbandonedCart)
+        .filter(AbandonedCart.customer_email == order.customer_email.lower())
+        .first()
+    )
+    if cart and cart.status == "open":
+        cart.status = "recovered"
+        cart.recovered_order_id = order.id
+        db.commit()
     # Mail de confirmación al cliente (idempotente). En modo __console__ sólo logea.
     send_order_created_email(order)
     db.commit()

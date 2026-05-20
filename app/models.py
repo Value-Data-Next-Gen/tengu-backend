@@ -418,6 +418,42 @@ class Post(Base):
     )
 
 
+class AbandonedCart(Base):
+    """Carrito abandonado: snapshot de items + datos del cliente capturados
+    cuando el usuario empieza a llenar el checkout pero no completa la orden.
+
+    Disparado desde POST /api/cart-events cuando el frontend detecta email
+    válido + items. Upsert por email (un solo carrito activo por cliente).
+
+    Status:
+    - open: carrito vivo, esperando recuperación
+    - recovered: se concretó orden con ese email (set automático)
+    - dismissed: admin lo marca como "no contactar" (cliente pidió no spam)
+    """
+    __tablename__ = "abandoned_carts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    customer_email: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    customer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    customer_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    items: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    subtotal_clp: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)
+    recovered_order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id"), nullable=True
+    )
+    admin_notes: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    last_reminder_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class HorecaLead(Base):
     __tablename__ = "horeca_leads"
 
