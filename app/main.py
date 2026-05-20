@@ -93,6 +93,17 @@ def _migrate_add_missing_columns() -> None:
             statements.append("ALTER TABLE site_settings ADD COLUMN subscription_enabled BOOLEAN DEFAULT 1")
         if "customer_accounts_enabled" not in ss_cols:
             statements.append("ALTER TABLE site_settings ADD COLUMN customer_accounts_enabled BOOLEAN DEFAULT 0")
+        if "promo_enabled" not in ss_cols:
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_enabled BOOLEAN DEFAULT 0")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_badge VARCHAR(40) DEFAULT 'OFERTA DEL MES'")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_title VARCHAR(120) DEFAULT ''")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_subtitle VARCHAR(200) DEFAULT ''")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_body VARCHAR(600) DEFAULT ''")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_cta_label VARCHAR(60) DEFAULT 'Ver oferta'")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_cta_url VARCHAR(300) DEFAULT '/tienda'")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_image VARCHAR(300)")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_expires_at VARCHAR(20)")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_dismiss_days INTEGER DEFAULT 7")
 
     if not statements:
         return

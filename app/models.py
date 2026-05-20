@@ -349,6 +349,22 @@ class SiteSettings(Base):
         String(500),
         default="Cotización mayorista personalizada desde 5 kg. Filtrado o espresso a tu medida.",
     )
+
+    # Promo popup. Si promo_enabled=True y no venció, muestra el modal en
+    # vez del NewsletterPopup. Pensado para "Oferta del mes" rotativa.
+    promo_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    promo_badge: Mapped[str] = mapped_column(String(40), default="OFERTA DEL MES")
+    promo_title: Mapped[str] = mapped_column(String(120), default="")
+    promo_subtitle: Mapped[str] = mapped_column(String(200), default="")
+    promo_body: Mapped[str] = mapped_column(String(600), default="")
+    promo_cta_label: Mapped[str] = mapped_column(String(60), default="Ver oferta")
+    promo_cta_url: Mapped[str] = mapped_column(String(300), default="/tienda")
+    promo_image: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    promo_expires_at: Mapped[str | None] = mapped_column(String(20), nullable=True)  # YYYY-MM-DD
+    # Cookie de dismiss: cuánto tiempo el cliente no vuelve a ver el popup
+    # después de cerrarlo. 7d cubre la mayoría sin ser invasivo.
+    promo_dismiss_days: Mapped[int] = mapped_column(Integer, default=7)
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(timezone.utc),
