@@ -31,6 +31,12 @@ class Product(Base):
     body: Mapped[str | None] = mapped_column(String(120), nullable=True)
     acidity: Mapped[str | None] = mapped_column(String(120), nullable=True)
     tasting_notes: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # Moliendas que el cliente puede pedir para este producto. Default 2:
+    # grano-entero + molido (medio). Admin puede activar específicas:
+    # espresso, v60, aeropress, prensa-francesa, moka.
+    grind_options: Mapped[list[str]] = mapped_column(
+        JSON, default=lambda: ["grano-entero", "molido"]
+    )
     image: Mapped[str | None] = mapped_column(String(200), nullable=True)
     category: Mapped[str] = mapped_column(String(40), index=True)
     featured: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -184,6 +190,9 @@ class OrderItem(Base):
     unit_price_clp: Mapped[int] = mapped_column(Integer)
     quantity: Mapped[int] = mapped_column(Integer)
     subtotal_clp: Mapped[int] = mapped_column(Integer)
+    # Molienda elegida por el cliente. Slug del set fijo definido en
+    # schemas._GRIND_VALUES. Default 'grano-entero' para líneas legacy.
+    grind: Mapped[str] = mapped_column(String(40), default="grano-entero")
 
     order: Mapped[Order] = relationship(back_populates="items")
 

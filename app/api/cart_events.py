@@ -30,6 +30,7 @@ class CartItemIn(BaseModel):
     size_g: int = Field(gt=0)
     unit_price_clp: int = Field(ge=0)
     quantity: int = Field(gt=0, le=99)
+    grind: str = Field(default="grano-entero", max_length=40)
 
 
 class CartEventIn(BaseModel):

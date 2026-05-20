@@ -72,6 +72,7 @@ def create_product(payload: ProductIn, db: Session = Depends(get_db)) -> Product
         featured=payload.featured,
         is_published=payload.is_published,
         description=payload.description,
+        grind_options=payload.grind_options,
         variants=[Variant(size_g=v.size_g, price_clp=v.price_clp, stock_qty=v.stock_qty) for v in payload.variants],
     )
     db.add(product)

@@ -21,6 +21,18 @@ _DISPOSABLE_DOMAINS = frozenset({
 
 _RUT_CLEANUP = re.compile(r"[.\s]")
 
+# Moliendas disponibles. Slug interno → label visible (frontend lo replica).
+GRIND_VALUES = (
+    "grano-entero",
+    "molido",
+    "espresso",
+    "v60",
+    "aeropress",
+    "prensa-francesa",
+    "moka",
+)
+_GRIND_SET = set(GRIND_VALUES)
+
 # Teléfono chileno: acepta variaciones comunes que tipea un usuario real:
 #   +56 9 1234 5678 / +56912345678 / 56912345678 / 9 1234 5678 / 91234567
 #   Normaliza a '+56 9 XXXX XXXX'. Rechaza fijos (Blue Express necesita móvil).
@@ -96,6 +108,7 @@ class ProductOut(BaseModel):
     is_published: bool
     description: str | None = None
     variants: list[VariantOut]
+    grind_options: list[str] = Field(default_factory=lambda: ["grano-entero", "molido"])
 
 
 # --- Orders ---
@@ -105,6 +118,14 @@ class OrderItemIn(BaseModel):
     product_slug: str
     size_g: int = Field(gt=0)
     quantity: int = Field(gt=0, le=99)
+    grind: str = Field(default="grano-entero", max_length=40)
+
+    @field_validator("grind")
+    @classmethod
+    def _grind_valid(cls, v: str) -> str:
+        if v not in _GRIND_SET:
+            raise ValueError(f"Molienda inválida: {v}")
+        return v
 
 
 class OrderIn(BaseModel):
@@ -165,6 +186,7 @@ class OrderItemOut(BaseModel):
     unit_price_clp: int
     quantity: int
     subtotal_clp: int
+    grind: str = "grano-entero"
 
 
 class OrderOut(BaseModel):
@@ -360,6 +382,19 @@ class ProductIn(BaseModel):
     is_published: bool = True
     description: str | None = Field(default=None, max_length=2000)
     variants: list[VariantIn] = Field(min_length=1)
+    grind_options: list[str] = Field(
+        default_factory=lambda: ["grano-entero", "molido"]
+    )
+
+    @field_validator("grind_options")
+    @classmethod
+    def _grind_options_valid(cls, v: list[str]) -> list[str]:
+        if not v:
+            return ["grano-entero", "molido"]
+        bad = [g for g in v if g not in _GRIND_SET]
+        if bad:
+            raise ValueError(f"Moliendas inválidas: {bad}")
+        return v
 
 
 class ProductPatch(BaseModel):
@@ -379,6 +414,19 @@ class ProductPatch(BaseModel):
     featured: bool | None = None
     is_published: bool | None = None
     description: str | None = None
+    grind_options: list[str] | None = None
+
+    @field_validator("grind_options")
+    @classmethod
+    def _patch_grind_options(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        if not v:
+            return ["grano-entero", "molido"]
+        bad = [g for g in v if g not in _GRIND_SET]
+        if bad:
+            raise ValueError(f"Moliendas inválidas: {bad}")
+        return v
 
 
 # --- Customer / Auth (público) ---

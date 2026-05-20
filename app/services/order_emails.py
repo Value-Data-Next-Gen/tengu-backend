@@ -26,12 +26,25 @@ def _money(clp: int) -> str:
     return f"${clp:,.0f}".replace(",", ".") + " CLP"
 
 
+_GRIND_LABEL = {
+    "grano-entero": "Grano entero",
+    "molido": "Molido (medio)",
+    "espresso": "Molido para espresso",
+    "v60": "Molido para V60",
+    "aeropress": "Molido para AeroPress",
+    "prensa-francesa": "Molido para prensa francesa",
+    "moka": "Molido para moka",
+}
+
+
 def _items_html(order: Order) -> str:
     rows = []
     for it in order.items:
+        grind_label = _GRIND_LABEL.get(getattr(it, "grind", None) or "grano-entero", "")
+        grind_note = f" <span style='color:#888;font-size:13px'>· {grind_label}</span>" if grind_label else ""
         rows.append(
             f"<tr>"
-            f"<td style='padding:6px 8px'>{it.product_name} {it.size_g}g × {it.quantity}</td>"
+            f"<td style='padding:6px 8px'>{it.product_name} {it.size_g}g × {it.quantity}{grind_note}</td>"
             f"<td style='padding:6px 8px;text-align:right'>{_money(it.subtotal_clp)}</td>"
             f"</tr>"
         )

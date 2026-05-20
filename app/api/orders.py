@@ -77,6 +77,13 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
                     f"quedan {variant.stock_qty} disponibles."
                 ),
             )
+        # Validar que la molienda esté entre las habilitadas para este producto
+        allowed = product.grind_options or ["grano-entero", "molido"]
+        if line.grind not in allowed:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Molienda '{line.grind}' no disponible para {product.name}",
+            )
         line_subtotal = variant.price_clp * line.quantity
         subtotal += line_subtotal
         items.append(
@@ -87,6 +94,7 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
                 unit_price_clp=variant.price_clp,
                 quantity=line.quantity,
                 subtotal_clp=line_subtotal,
+                grind=line.grind,
             )
         )
 

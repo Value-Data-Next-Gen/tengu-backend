@@ -70,6 +70,22 @@ def _migrate_add_missing_columns() -> None:
     if "user_agent" not in existing:
         statements.append("ALTER TABLE orders ADD COLUMN user_agent VARCHAR(300)")
 
+    # Migración: products.grind_options + order_items.grind
+    if inspector.has_table("products"):
+        prod_cols = {c["name"] for c in inspector.get_columns("products")}
+        if "grind_options" not in prod_cols:
+            statements.append("ALTER TABLE products ADD COLUMN grind_options JSON")
+    if inspector.has_table("order_items"):
+        oi_cols = {c["name"] for c in inspector.get_columns("order_items")}
+        if "grind" not in oi_cols:
+            statements.append("ALTER TABLE order_items ADD COLUMN grind VARCHAR(40) DEFAULT 'grano-entero'")
+
+    # Backfill grind_options para productos existentes (NULL → default 2 opciones)
+    backfill_grind_options = (
+        inspector.has_table("products") and
+        "grind_options" not in {c["name"] for c in inspector.get_columns("products")}
+    )
+
     # Migración para site_settings.subscription_enabled / customer_accounts_enabled
     if inspector.has_table("site_settings"):
         ss_cols = {c["name"] for c in inspector.get_columns("site_settings")}
@@ -86,6 +102,12 @@ def _migrate_add_missing_columns() -> None:
     # Backfill: las órdenes legacy quedan con access_token=NULL al ALTER.
     # Las rellenamos para que /cuenta y /thanks funcionen consistente. El token
     # es un secreto razonable (el dueño es el único con el link).
+    if backfill_grind_options:
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE products SET grind_options = '[\"grano-entero\", \"molido\"]' "
+                "WHERE grind_options IS NULL"
+            ))
     if backfill_access_tokens:
         from .models import Order, _gen_access_token
         with engine.begin() as conn:
