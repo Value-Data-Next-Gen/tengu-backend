@@ -529,6 +529,9 @@ class SiteSettingsOut(BaseModel):
     announcement_expires_at: str | None = None
     # Promo popup
     promo_enabled: bool = False
+    promo_trigger: str = "exit"
+    promo_delay_seconds: int = 10
+    promo_show_countdown: bool = False
     promo_badge: str = "OFERTA DEL MES"
     promo_title: str = ""
     promo_subtitle: str = ""
@@ -558,6 +561,9 @@ class SiteSettingsPatch(BaseModel):
     announcement_text_color: str | None = Field(default=None, max_length=20)
     announcement_expires_at: str | None = Field(default=None, max_length=20)
     promo_enabled: bool | None = None
+    promo_trigger: Literal["exit", "delay", "scroll", "immediate"] | None = None
+    promo_delay_seconds: int | None = Field(default=None, ge=0, le=600)
+    promo_show_countdown: bool | None = None
     promo_badge: str | None = Field(default=None, max_length=40)
     promo_title: str | None = Field(default=None, max_length=120)
     promo_subtitle: str | None = Field(default=None, max_length=200)

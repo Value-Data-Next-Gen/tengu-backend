@@ -379,6 +379,15 @@ class SiteSettings(Base):
     # Promo popup. Si promo_enabled=True y no venció, muestra el modal en
     # vez del NewsletterPopup. Pensado para "Oferta del mes" rotativa.
     promo_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Cuándo se gatilla el popup:
+    # - 'exit': cuando cursor sale por arriba (desktop) o tras dwell+scroll (mobile)
+    # - 'delay': después de promo_delay_seconds desde que carga la página
+    # - 'scroll': cuando el usuario llega al 40% del scroll
+    # - 'immediate': al cargar (más agresivo, ideal para Black Friday)
+    promo_trigger: Mapped[str] = mapped_column(String(20), default="exit")
+    promo_delay_seconds: Mapped[int] = mapped_column(Integer, default=10)
+    # Si True y promo_expires_at está seteado, muestra contador "Termina en…"
+    promo_show_countdown: Mapped[bool] = mapped_column(Boolean, default=False)
     promo_badge: Mapped[str] = mapped_column(String(40), default="OFERTA DEL MES")
     promo_title: Mapped[str] = mapped_column(String(120), default="")
     promo_subtitle: Mapped[str] = mapped_column(String(200), default="")

@@ -116,6 +116,10 @@ def _migrate_add_missing_columns() -> None:
             statements.append("ALTER TABLE site_settings ADD COLUMN announcement_bg_color VARCHAR(20) DEFAULT '#E63946'")
             statements.append("ALTER TABLE site_settings ADD COLUMN announcement_text_color VARCHAR(20) DEFAULT '#F5F1EA'")
             statements.append("ALTER TABLE site_settings ADD COLUMN announcement_expires_at VARCHAR(20)")
+        if "promo_trigger" not in ss_cols:
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_trigger VARCHAR(20) DEFAULT 'exit'")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_delay_seconds INTEGER DEFAULT 10")
+            statements.append("ALTER TABLE site_settings ADD COLUMN promo_show_countdown BOOLEAN DEFAULT 0")
         if "promo_enabled" not in ss_cols:
             statements.append("ALTER TABLE site_settings ADD COLUMN promo_enabled BOOLEAN DEFAULT 0")
             statements.append("ALTER TABLE site_settings ADD COLUMN promo_badge VARCHAR(40) DEFAULT 'OFERTA DEL MES'")
