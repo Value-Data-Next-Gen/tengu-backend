@@ -76,6 +76,9 @@ class Variant(Base):
     size_g: Mapped[int] = mapped_column(Integer)
     price_clp: Mapped[int] = mapped_column(Integer)
     stock_qty: Mapped[int] = mapped_column(Integer, default=50)
+    # Precio "antes" para mostrar tachado. Si > price_clp, frontend tacha el
+    # compare_at_price y muestra price_clp como "ahora". Null = sin oferta.
+    compare_at_price_clp: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     product: Mapped[Product] = relationship(back_populates="variants")
 
@@ -137,6 +140,10 @@ class Order(Base):
     shipping_cost_clp: Mapped[int] = mapped_column(Integer, default=0)
 
     subtotal_clp: Mapped[int] = mapped_column(Integer)
+    # Descuento aplicado por código (cupón). 0 si no había. Se descuenta del
+    # subtotal antes de sumar envío para llegar a total.
+    coupon_code: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    discount_clp: Mapped[int] = mapped_column(Integer, default=0)
     total_clp: Mapped[int] = mapped_column(Integer)
 
     payment_method: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
@@ -350,6 +357,12 @@ class SiteSettings(Base):
         default="Cotización mayorista personalizada desde 5 kg. Filtrado o espresso a tu medida.",
     )
 
+    # Umbral para mostrar "Quedan X disponibles" en la tienda pública.
+    # Si stock_qty de una variante > threshold, el endpoint público devuelve
+    # stock_low=None (no expone el número). Si <= threshold, expone el número.
+    # 0 desactiva la feature.
+    low_stock_threshold: Mapped[int] = mapped_column(Integer, default=10)
+
     # Barra superior anunciante. Si announcement_enabled=True y no venció,
     # reemplaza los 3 mensajes default (envío gratis / tueste / despacho)
     # por el mensaje custom — útil para eventos puntuales: Black Friday,
@@ -489,6 +502,42 @@ class AbandonedCart(Base):
         DateTime,
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
+class DiscountCode(Base):
+    """Código de descuento aplicable en /checkout. Modelo unificado para:
+    - Cupones porcentuales (kind='percent', value=20 → -20%)
+    - Cupones de monto fijo (kind='fixed', value=5000 → -$5.000)
+
+    Opciones admin: min_subtotal, vigencia (from/until), max_uses,
+    applies_to (sitewide, categoría o producto específico).
+    """
+    __tablename__ = "discount_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Normalizado mayúsculas sin espacios al guardar; el cliente lo tipea libre.
+    code: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    kind: Mapped[str] = mapped_column(String(20))  # 'percent' o 'fixed'
+    value: Mapped[int] = mapped_column(Integer)  # 1-100 si percent; CLP positivo si fixed
+
+    # Reglas de elegibilidad
+    min_subtotal_clp: Mapped[int] = mapped_column(Integer, default=0)
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    valid_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Alcance. 'all' = sitewide. 'category' = solo productos de category.
+    # 'product' = solo un slug. Si applies_to != 'all' y aplica_value vacío,
+    # se trata como 'all' (defensivo).
+    applies_to: Mapped[str] = mapped_column(String(20), default="all")
+    applies_value: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
     )
 
 

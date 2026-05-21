@@ -24,6 +24,8 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 class VariantUpdate(BaseModel):
     price_clp: int | None = Field(default=None, gt=0)  # no aceptamos café gratis (consistente con VariantIn)
     stock_qty: int | None = Field(default=None, ge=0)
+    # compare_at_price_clp: pasar 0 para limpiarlo (sin oferta), valor positivo para activarla.
+    compare_at_price_clp: int | None = Field(default=None, ge=0)
 
 
 class AdminVariantOut(BaseModel):
@@ -32,6 +34,7 @@ class AdminVariantOut(BaseModel):
     size_g: int
     price_clp: int
     stock_qty: int
+    compare_at_price_clp: int | None = None
 
 
 class AdminProductOut(ProductOut):
@@ -73,7 +76,15 @@ def create_product(payload: ProductIn, db: Session = Depends(get_db)) -> Product
         is_published=payload.is_published,
         description=payload.description,
         grind_options=payload.grind_options,
-        variants=[Variant(size_g=v.size_g, price_clp=v.price_clp, stock_qty=v.stock_qty) for v in payload.variants],
+        variants=[
+            Variant(
+                size_g=v.size_g,
+                price_clp=v.price_clp,
+                stock_qty=v.stock_qty,
+                compare_at_price_clp=v.compare_at_price_clp,
+            )
+            for v in payload.variants
+        ],
     )
     db.add(product)
     db.commit()
@@ -121,6 +132,7 @@ def add_variant(slug: str, payload: VariantIn, db: Session = Depends(get_db)) ->
         size_g=payload.size_g,
         price_clp=payload.price_clp,
         stock_qty=payload.stock_qty,
+        compare_at_price_clp=payload.compare_at_price_clp,
     )
     db.add(variant)
     db.commit()
@@ -154,6 +166,14 @@ def update_variant(
         variant.price_clp = payload.price_clp
     if payload.stock_qty is not None:
         variant.stock_qty = payload.stock_qty
+    if payload.compare_at_price_clp is not None:
+        # 0 (o cualquier valor que no sea estrictamente mayor a price_clp) lo
+        # interpretamos como "limpiar la oferta" — no tiene sentido mostrar
+        # tachado un precio que es igual o menor al actual.
+        if payload.compare_at_price_clp > variant.price_clp:
+            variant.compare_at_price_clp = payload.compare_at_price_clp
+        else:
+            variant.compare_at_price_clp = None
     db.commit()
     db.refresh(variant)
     return variant

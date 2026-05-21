@@ -80,6 +80,19 @@ def _migrate_add_missing_columns() -> None:
         if "grind" not in oi_cols:
             statements.append("ALTER TABLE order_items ADD COLUMN grind VARCHAR(40) DEFAULT 'grano-entero'")
 
+    # variants.compare_at_price_clp para precios tachados (oferta)
+    if inspector.has_table("variants"):
+        var_cols = {c["name"] for c in inspector.get_columns("variants")}
+        if "compare_at_price_clp" not in var_cols:
+            statements.append("ALTER TABLE variants ADD COLUMN compare_at_price_clp INTEGER")
+
+    # orders.coupon_code + discount_clp para cupones aplicados
+    if "coupon_code" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN coupon_code VARCHAR(40)")
+        statements.append("CREATE INDEX IF NOT EXISTS ix_orders_coupon_code ON orders(coupon_code)")
+    if "discount_clp" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN discount_clp INTEGER DEFAULT 0")
+
     # Backfill grind_options para productos existentes (NULL → default 2 opciones)
     backfill_grind_options = (
         inspector.has_table("products") and
@@ -93,6 +106,8 @@ def _migrate_add_missing_columns() -> None:
             statements.append("ALTER TABLE site_settings ADD COLUMN subscription_enabled BOOLEAN DEFAULT 1")
         if "customer_accounts_enabled" not in ss_cols:
             statements.append("ALTER TABLE site_settings ADD COLUMN customer_accounts_enabled BOOLEAN DEFAULT 0")
+        if "low_stock_threshold" not in ss_cols:
+            statements.append("ALTER TABLE site_settings ADD COLUMN low_stock_threshold INTEGER DEFAULT 10")
         if "announcement_enabled" not in ss_cols:
             statements.append("ALTER TABLE site_settings ADD COLUMN announcement_enabled BOOLEAN DEFAULT 0")
             statements.append("ALTER TABLE site_settings ADD COLUMN announcement_text VARCHAR(200) DEFAULT ''")

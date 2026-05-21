@@ -15,6 +15,26 @@ SEED_IMAGES = BACKEND_ROOT / "seed" / "images"
 UPLOADS_DIR = Path(settings.uploads_dir) if settings.uploads_dir else BACKEND_ROOT / "uploads"
 
 
+DEFAULT_NONCOFFEE_CATEGORIES = [
+    ("Tazas", "Tazas y vasos térmicos", 200),
+    ("Equipo de preparación", "V60, AeroPress, prensas, kettles", 210),
+    ("Molinillos", "Manuales y eléctricos", 220),
+    ("Accesorios", "Filtros, balanzas, jarras, lecheras", 230),
+]
+
+
+def _ensure_default_categories(db: Session) -> None:
+    """Crea categorías comunes para productos no-café. is_visible=False:
+    quedan disponibles en /admin/categories sin aparecer en la tienda hasta
+    que el admin las active. Idempotente."""
+    for name, desc, sort_order in DEFAULT_NONCOFFEE_CATEGORIES:
+        existing = db.query(Category).filter(Category.name == name).first()
+        if existing:
+            continue
+        db.add(Category(name=name, description=desc, is_visible=False, sort_order=sort_order))
+    db.commit()
+
+
 def ensure_uploads_seeded() -> None:
     """Copia los archivos del seed que aún no estén en UPLOADS_DIR.
     Idempotente: corre en cada startup. Cuando agregamos un PNG nuevo al
@@ -33,6 +53,10 @@ def ensure_uploads_seeded() -> None:
 
 def seed_products(db: Session) -> int:
     ensure_uploads_seeded()
+
+    # Seed de categorías comunes para no-café (invisibles hasta que admin las
+    # active + sume productos). Idempotente — solo crea si no existen.
+    _ensure_default_categories(db)
 
     if db.query(Product).count() > 0:
         return 0

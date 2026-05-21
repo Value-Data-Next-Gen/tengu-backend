@@ -83,6 +83,12 @@ class VariantOut(BaseModel):
     id: int
     size_g: int
     price_clp: int
+    # Stock expuesto SOLO cuando es bajo (configurable en site_settings.low_stock_threshold).
+    # Si stock es alto, devolvemos None — evita que competidores scrapen niveles.
+    # Si es 0, devolvemos 0 explícito (out of stock).
+    stock_low: int | None = None
+    # Precio "antes" para mostrar tachado en oferta. None = sin oferta.
+    compare_at_price_clp: int | None = None
 
 
 class ProductOut(BaseModel):
@@ -174,6 +180,7 @@ class OrderIn(BaseModel):
     # 'webpay'/'khipu' se setea desde /api/checkout/*/init.
     payment_method: Literal["bank_transfer", "webpay", "khipu", "mercadopago"] | None = None
     items: list[OrderItemIn] = Field(min_length=1, max_length=20)
+    coupon_code: str | None = Field(default=None, max_length=40)
 
 
 class OrderItemOut(BaseModel):
@@ -214,6 +221,8 @@ class OrderOut(BaseModel):
     paid_at: datetime | None
     shipped_at: datetime | None
     items: list[OrderItemOut]
+    coupon_code: str | None = None
+    discount_clp: int = 0
 
 
 class OrderCreatedOut(OrderOut):
@@ -229,6 +238,28 @@ class OrderCreatedOut(OrderOut):
 
 class CheckoutInitIn(BaseModel):
     order_id: int
+
+
+class CouponValidateItemIn(BaseModel):
+    product_slug: str
+    category: str | None = None
+    subtotal_clp: int = Field(ge=0)
+
+
+class CouponValidateIn(BaseModel):
+    code: str = Field(min_length=1, max_length=40)
+    subtotal_clp: int = Field(ge=0)
+    items: list[CouponValidateItemIn] = Field(default_factory=list, max_length=20)
+
+
+class CouponValidateOut(BaseModel):
+    valid: bool
+    code: str
+    discount_clp: int = 0
+    kind: str | None = None  # 'percent' | 'fixed'
+    value: int | None = None
+    message: str | None = None  # explicación cuando valid=False
+    description: str | None = None  # cuando valid=True, mensaje "público" del cupón
 
 
 # --- Suscripciones ---
@@ -359,6 +390,7 @@ class VariantIn(BaseModel):
     size_g: int = Field(gt=0)
     price_clp: int = Field(gt=0)  # no aceptamos café gratis
     stock_qty: int = Field(ge=0, default=50)
+    compare_at_price_clp: int | None = Field(default=None, gt=0)
 
 
 class ProductIn(BaseModel):
@@ -486,6 +518,7 @@ class SiteSettingsOut(BaseModel):
     customer_accounts_enabled: bool = False
     wholesale_min_kg: int
     wholesale_lead_msg: str
+    low_stock_threshold: int = 10
     # Announcement bar superior
     announcement_enabled: bool = False
     announcement_text: str = ""
@@ -516,6 +549,7 @@ class SiteSettingsPatch(BaseModel):
     customer_accounts_enabled: bool | None = None
     wholesale_min_kg: int | None = Field(default=None, ge=1)
     wholesale_lead_msg: str | None = Field(default=None, max_length=500)
+    low_stock_threshold: int | None = Field(default=None, ge=0, le=10000)
     announcement_enabled: bool | None = None
     announcement_text: str | None = Field(default=None, max_length=200)
     announcement_link_url: str | None = Field(default=None, max_length=300)
