@@ -9,11 +9,40 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db import get_db
 from ..models import Order, OrderStatus
-from ..schemas import CheckoutInitIn, KhipuInitOut, MercadoPagoInitOut, WebpayInitOut
+from ..schemas import (
+    CheckoutInitIn,
+    CouponValidateIn,
+    CouponValidateOut,
+    KhipuInitOut,
+    MercadoPagoInitOut,
+    WebpayInitOut,
+)
 from ..services import khipu, mercadopago, webpay
+from ..services.coupons import evaluate_coupon
 from ..services.order_lifecycle import mark_order_paid
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
+
+
+@router.post("/validate-coupon", response_model=CouponValidateOut)
+def validate_coupon(payload: CouponValidateIn, db: Session = Depends(get_db)) -> CouponValidateOut:
+    """Endpoint público para validar un código antes de crear la orden.
+    Solo previsualiza el descuento; la aplicación real ocurre server-side
+    en POST /api/orders (que re-valida)."""
+    items_dicts = [it.model_dump() for it in payload.items]
+    discount, error, coupon = evaluate_coupon(
+        db, payload.code, subtotal_clp=payload.subtotal_clp, items=items_dicts
+    )
+    if error or not coupon:
+        return CouponValidateOut(valid=False, code=payload.code.upper(), message=error or "Código inválido.")
+    return CouponValidateOut(
+        valid=True,
+        code=coupon.code,
+        discount_clp=discount,
+        kind=coupon.kind,
+        value=coupon.value,
+        description=coupon.description,
+    )
 
 
 def _verify_mp_signature(

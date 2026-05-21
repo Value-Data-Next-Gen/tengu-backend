@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ..db import get_db
 from ..models import AbandonedCart, Customer, Order, OrderItem, Product, ShippingMethod
 from ..schemas import OrderCreatedOut, OrderIn, OrderOut
+from ..services.coupons import evaluate_coupon
 from ..services.customer_auth import optional_customer
 from ..services.order_emails import send_order_created_email
 from ..services.rate_limit import client_ip, orders_create_limiter, orders_per_email_limiter
@@ -114,7 +115,33 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
             subtotal_clp=subtotal,
         )
         shipping_cost = quote["cost_clp"]
-    total = subtotal + shipping_cost
+
+    # Cupón (opcional). Server-side: re-evalúa contra la DB para que el
+    # cliente no pueda enviar un descuento manipulado.
+    discount_clp = 0
+    coupon_code_norm: str | None = None
+    coupon_obj = None
+    if payload.coupon_code:
+        items_for_coupon = [
+            {
+                "product_slug": it.product_slug,
+                "category": next(
+                    (p.category for p in [
+                        db.query(Product).filter(Product.slug == it.product_slug).first()
+                    ] if p), None,
+                ),
+                "subtotal_clp": it.subtotal_clp,
+            }
+            for it in items
+        ]
+        discount_clp, err, coupon_obj = evaluate_coupon(
+            db, payload.coupon_code, subtotal_clp=subtotal, items=items_for_coupon
+        )
+        if err:
+            raise HTTPException(status_code=422, detail=err)
+        coupon_code_norm = coupon_obj.code if coupon_obj else None
+
+    total = max(0, subtotal - discount_clp) + shipping_cost
 
     customer = _upsert_customer(db, payload)
 
@@ -135,6 +162,8 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
         shipping_notes=payload.shipping_notes,
         shipping_cost_clp=shipping_cost,
         subtotal_clp=subtotal,
+        coupon_code=coupon_code_norm,
+        discount_clp=discount_clp,
         total_clp=total,
         payment_method=payload.payment_method,
         items=items,

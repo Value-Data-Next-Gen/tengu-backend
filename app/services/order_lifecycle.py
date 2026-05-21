@@ -49,11 +49,27 @@ def mark_order_paid(order: Order, db: Session, *, allow_from_failed: bool = Fals
     order.status = OrderStatus.paid.value
     order.paid_at = datetime.now(timezone.utc)
     _decrement_stock_if_needed(order, db)
+    _increment_coupon_used_count(order, db)
     # Emails (cliente + admin). Idempotente vía notification_paid_sent_at.
     # Import diferido para evitar ciclo con services/order_emails.
     from .order_emails import send_order_paid_emails
     send_order_paid_emails(order)
     return True
+
+
+def _increment_coupon_used_count(order: Order, db: Session) -> None:
+    """Suma 1 a DiscountCode.used_count cuando se paga una orden con cupón.
+    El stock_decremented_at hace de proxy para idempotencia: si ya estaba
+    seteado antes de esta llamada, no incrementamos (ya se contabilizó).
+    """
+    if not order.coupon_code:
+        return
+    # Import local para evitar import circular
+    from ..models import DiscountCode
+
+    coupon = db.query(DiscountCode).filter(DiscountCode.code == order.coupon_code).first()
+    if coupon:
+        coupon.used_count = (coupon.used_count or 0) + 1
 
 
 def _decrement_stock_if_needed(order: Order, db: Session) -> None:
