@@ -1,7 +1,10 @@
+import csv
+import io
 from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -29,6 +32,57 @@ def list_orders(
     if status:
         q = q.filter(Order.status == status)
     return q.order_by(Order.created_at.desc()).all()
+
+
+@router.get("/export.csv")
+def export_orders_csv(
+    status: str | None = None, db: Session = Depends(get_db)
+) -> StreamingResponse:
+    """Exporta los pedidos a CSV (una fila por pedido, items resumidos).
+    Acepta el mismo filtro de status que el listado."""
+    q = db.query(Order)
+    if status:
+        q = q.filter(Order.status == status)
+    orders = q.order_by(Order.created_at.asc()).all()
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([
+        "id", "fecha", "estado", "cliente", "email", "telefono", "rut",
+        "envio", "comuna", "region", "subtotal_clp", "envio_clp",
+        "descuento_clp", "total_clp", "cupon", "metodo_pago", "tracking", "items",
+    ])
+    for o in orders:
+        items = " | ".join(
+            f"{it.product_name} {it.size_g}g x{it.quantity} ({it.grind})" for it in o.items
+        )
+        writer.writerow([
+            o.id,
+            o.created_at.isoformat() if o.created_at else "",
+            o.status,
+            o.customer_name,
+            o.customer_email,
+            o.customer_phone,
+            o.customer_rut,
+            o.shipping_method,
+            o.shipping_comuna or "",
+            o.shipping_region or "",
+            o.subtotal_clp,
+            o.shipping_cost_clp,
+            o.discount_clp,
+            o.total_clp,
+            o.coupon_code or "",
+            o.payment_method or "",
+            o.tracking_code or "",
+            items,
+        ])
+    buf.seek(0)
+    # BOM para que Excel (es-CL) abra los acentos y el CSV bien.
+    return StreamingResponse(
+        iter(["﻿" + buf.getvalue()]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="pedidos-tengu.csv"'},
+    )
 
 
 @router.patch("/{order_id}", response_model=OrderOut)
