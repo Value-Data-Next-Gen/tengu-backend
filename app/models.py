@@ -178,6 +178,9 @@ class Order(Base):
     # por orden, aunque el webhook MP/Khipu reintente. Si no es None, el
     # efecto ya se aplicó y no se repite.
     stock_decremented_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Idempotencia del conteo de uso del cupón: se setea la única vez que se
+    # incrementa DiscountCode.used_count para esta orden.
+    coupon_counted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     notification_created_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     notification_paid_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
@@ -202,6 +205,47 @@ class OrderItem(Base):
     grind: Mapped[str] = mapped_column(String(40), default="grano-entero")
 
     order: Mapped[Order] = relationship(back_populates="items")
+
+
+class StockMovement(Base):
+    """Kardex: registro inmutable de cada movimiento de stock de una variante.
+
+    Invariante: la suma de `delta` de todos los movimientos de una variante ==
+    su `Variant.stock_qty` actual. Cada fila guarda `balance_after` para
+    auditoría y reconstrucción rápida. Nada muta stock_qty fuera del servicio
+    `services/stock.py` (que es el único que escribe esta tabla).
+
+    Razones (`reason`):
+    - opening: saldo inicial al activar el kardex sobre una DB ya poblada.
+    - seed:    alta de stock de una variante nueva (seed o creación admin).
+    - reserve: -qty al crear una orden pending (reserva el stock disponible).
+    - release: +qty al cancelar/fallar/expirar una orden que tenía reserva.
+    - restock: +qty ingreso manual de inventario (compra/tueste) desde /admin.
+    - adjust:  ajuste manual firmado (merma, corrección de conteo) desde /admin.
+    """
+    __tablename__ = "stock_movements"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    variant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("variants.id"), nullable=True, index=True
+    )
+    # Denormalizado: sobrevive al borrado de la variante/producto (auditoría).
+    product_slug: Mapped[str] = mapped_column(String(120), index=True)
+    size_g: Mapped[int] = mapped_column(Integer)
+    # Firmado: + ingresa stock, - sale stock.
+    delta: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(20), index=True)
+    balance_after: Mapped[int] = mapped_column(Integer)
+    order_id: Mapped[int | None] = mapped_column(
+        ForeignKey("orders.id"), nullable=True, index=True
+    )
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    # Email del admin que originó el movimiento, o 'system' para movimientos
+    # automáticos (reserva/liberación por flujo de orden).
+    created_by: Mapped[str] = mapped_column(String(120), default="system")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc), index=True
+    )
 
 
 class AdminLoginToken(Base):

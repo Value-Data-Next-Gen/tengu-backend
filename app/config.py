@@ -138,6 +138,23 @@ def assert_production_secrets() -> None:
         raise RuntimeError(
             f"FRONTEND_URL debe ser un URL https:// en producción. Valor actual: {settings.frontend_url!r}"
         )
+    if settings.mp_environment.lower() == "live" and not settings.mp_cs_wbhk:
+        # Sin la clave secreta del webhook, /mercadopago/notify acepta cualquier
+        # POST (modo permisivo). En producción con MP en vivo eso es falsificable:
+        # alguien con un payment_id aprobado real podría degradar/forzar órdenes.
+        raise RuntimeError(
+            "MP_CS_WBHK no configurado con MP_ENVIRONMENT=live — "
+            "setea la clave secreta del webhook (panel MP → Webhooks → Configurar firma) "
+            "para validar la firma de /mercadopago/notify en producción."
+        )
+    if settings.smtp_host in ("", "__console__"):
+        # En prod sin SMTP real los emails de orden creada / pago confirmado /
+        # aviso al admin se imprimen en consola pero nunca se envían.
+        raise RuntimeError(
+            "SMTP_HOST sin configurar en producción (sigue en __console__) — "
+            "los emails transaccionales no se enviarían. Configura un SMTP real "
+            "(Resend, Brevo, etc.) vía las env vars SMTP_*."
+        )
     if not settings.uploads_dir.startswith("/home/"):
         # En Azure App Service /home es la única zona persistente. Sin esto,
         # las imágenes subidas desde /admin se pierden en cada redeploy.

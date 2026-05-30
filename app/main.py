@@ -61,6 +61,8 @@ def _migrate_add_missing_columns() -> None:
         statements.append("ALTER TABLE orders ADD COLUMN mp_response JSON")
     if "stock_decremented_at" not in existing:
         statements.append("ALTER TABLE orders ADD COLUMN stock_decremented_at DATETIME")
+    if "coupon_counted_at" not in existing:
+        statements.append("ALTER TABLE orders ADD COLUMN coupon_counted_at DATETIME")
     if "notification_created_sent_at" not in existing:
         statements.append("ALTER TABLE orders ADD COLUMN notification_created_sent_at DATETIME")
     if "notification_paid_sent_at" not in existing:
@@ -168,6 +170,12 @@ async def lifespan(_: FastAPI):
             seed_products(db)
             seed_posts(db)
             ensure_shipping_seeded(db)
+    # Kardex: siembra el saldo de apertura para variantes preexistentes que aún
+    # no tengan movimientos (idempotente), para que la suma del ledger cuadre
+    # con stock_qty desde el primer arranque tras el deploy.
+    with SessionLocal() as db:
+        from .services.stock import ensure_opening_balances
+        ensure_opening_balances(db)
     # Arranca el cron de suscripciones (no bloquea el startup)
     cron_task = asyncio.create_task(subscription_cron_loop())
     try:

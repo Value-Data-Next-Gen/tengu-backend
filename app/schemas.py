@@ -461,6 +461,36 @@ class ProductPatch(BaseModel):
         return v
 
 
+# --- Kardex / inventario (admin) ---
+
+
+class StockMovementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    variant_id: int | None
+    product_slug: str
+    size_g: int
+    delta: int
+    reason: str
+    balance_after: int
+    order_id: int | None
+    note: str | None
+    created_by: str
+    created_at: datetime
+
+
+class RestockIn(BaseModel):
+    """Ingreso manual de inventario (+qty)."""
+    qty: int = Field(gt=0, le=1_000_000)
+    note: str | None = Field(default=None, max_length=300)
+
+
+class StockAdjustIn(BaseModel):
+    """Ajuste del stock a un valor absoluto (merma, corrección de conteo)."""
+    stock_qty: int = Field(ge=0, le=1_000_000)
+    note: str | None = Field(default=None, max_length=300)
+
+
 # --- Customer / Auth (público) ---
 
 

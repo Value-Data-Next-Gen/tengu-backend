@@ -19,7 +19,7 @@ from ..schemas import (
 )
 from ..services import khipu, mercadopago, webpay
 from ..services.coupons import evaluate_coupon
-from ..services.order_lifecycle import mark_order_paid
+from ..services.order_lifecycle import mark_order_paid, mark_order_unpaid
 
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
 
@@ -107,13 +107,18 @@ def webpay_return(
     TBK_ORDEN_COMPRA: str | None = Form(default=None),
 ) -> RedirectResponse:
     if TBK_TOKEN or TBK_ORDEN_COMPRA:
+        # Flujo de aborto/timeout de Transbank: el usuario canceló en el form.
         order = (
             db.query(Order).filter(Order.webpay_buy_order == TBK_ORDEN_COMPRA).first()
             if TBK_ORDEN_COMPRA
             else None
         )
         if order and order.status == OrderStatus.pending.value:
-            order.status = OrderStatus.canceled.value
+            mark_order_unpaid(
+                order, db,
+                new_status=OrderStatus.canceled.value,
+                note="[Webpay] cancelada por el usuario en el formulario",
+            )
             db.commit()
         return _redirect_to_thanks(
             order_id=order.id if order else None,
@@ -124,23 +129,44 @@ def webpay_return(
     if not token_ws:
         return _redirect_to_thanks(order_id=None, status="timeout")
 
-    response = webpay.commit_transaction(token_ws)
-
     order = db.query(Order).filter(Order.webpay_token == token_ws).first()
     if not order:
         return _redirect_to_thanks(order_id=None, status="not_found")
 
+    # Guarda anti doble-callback: si la orden ya no está pending (Transbank
+    # reintentó el return, el usuario recargó el form, etc.) NO re-commiteamos
+    # contra Transbank ni re-transicionamos. Devolvemos el estado actual.
+    if order.status != OrderStatus.pending.value:
+        result = "paid" if order.status == OrderStatus.paid.value else "failed"
+        return _redirect_to_thanks(order_id=order.id, status=result, token=order.access_token)
+
+    response = webpay.commit_transaction(token_ws)
     order.webpay_response = response
-    order.webpay_authorization_code = response.get("authorization_code") if isinstance(response, dict) else None
+    order.webpay_authorization_code = (
+        response.get("authorization_code") if isinstance(response, dict) else None
+    )
 
     response_code = response.get("response_code") if isinstance(response, dict) else None
     status_str = response.get("status") if isinstance(response, dict) else None
+    # Validar el MONTO cobrado contra el total de la orden. Webpay devuelve
+    # `amount` en el commit. Tolerancia ±2 CLP por redondeo (igual que MP).
+    amount = response.get("amount") if isinstance(response, dict) else None
+    amount_ok = amount is not None and abs(round(float(amount)) - order.total_clp) <= 2
 
-    if response_code == 0 and status_str == "AUTHORIZED":
+    if response_code == 0 and status_str == "AUTHORIZED" and amount_ok:
         mark_order_paid(order, db)
         result = "paid"
+    elif response_code == 0 and status_str == "AUTHORIZED" and not amount_ok:
+        # Autorizado pero el monto no cuadra: NO despachar. Transbank ya capturó,
+        # así que se deja failed + nota para que el admin revise/devuelva.
+        mark_order_unpaid(
+            order, db,
+            new_status=OrderStatus.failed.value,
+            note=f"[Webpay] amount_mismatch: cobrado {amount} ≠ esperado {order.total_clp}. Revisar/devolver.",
+        )
+        result = "failed"
     else:
-        order.status = OrderStatus.failed.value
+        mark_order_unpaid(order, db, new_status=OrderStatus.failed.value)
         result = "failed"
 
     db.commit()
@@ -224,7 +250,10 @@ async def khipu_notify(request: Request, db: Session = Depends(get_db)) -> dict:
         mark_order_paid(order, db)
     elif payment.get("status") in {"expired", "rejected"}:
         if order.status == OrderStatus.pending.value:
-            order.status = OrderStatus.failed.value
+            mark_order_unpaid(
+                order, db, new_status=OrderStatus.failed.value,
+                note=f"[Khipu] {payment.get('status')}",
+            )
 
     db.commit()
     return {"ok": True, "status": payment.get("status")}
@@ -261,7 +290,10 @@ def khipu_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
     if payment.get("status") == "done":
         mark_order_paid(order, db)
     elif payment.get("status") in {"expired", "rejected"} and order.status == OrderStatus.pending.value:
-        order.status = OrderStatus.failed.value
+        mark_order_unpaid(
+            order, db, new_status=OrderStatus.failed.value,
+            note=f"[Khipu] {payment.get('status')}",
+        )
 
     db.commit()
     return {"order_status": order.status, "khipu_status": payment.get("status")}
@@ -393,7 +425,8 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
         if "[MP] amount_mismatch" not in existing:
             order.admin_notes = (existing + "\n" + tag).strip()[:1000]
         if order.status == OrderStatus.pending.value:
-            order.status = OrderStatus.failed.value
+            # Libera la reserva de stock; la nota ya quedó arriba.
+            mark_order_unpaid(order, db, new_status=OrderStatus.failed.value)
         db.commit()
         return {"ok": True, "warning": "amount_mismatch", "blocked": True}
 
@@ -407,7 +440,7 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
     if status_mp == "approved":
         mark_order_paid(order, db)
     elif order.status == OrderStatus.pending.value and status_mp in {"rejected", "cancelled"}:
-        order.status = OrderStatus.failed.value
+        mark_order_unpaid(order, db, new_status=OrderStatus.failed.value, note=f"[MP] {status_mp}")
     elif order.status == OrderStatus.paid.value and status_mp in {"refunded", "charged_back"}:
         # Pago revertido post-aprobación: dejamos nota para revisión admin pero
         # no automatizamos el cambio de estado (necesita refund flow + stock).
@@ -464,7 +497,7 @@ def mercadopago_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
     if status_mp == "approved" and amount_ok:
         mark_order_paid(order, db, allow_from_failed=True)
     elif order.status == OrderStatus.pending.value and status_mp in {"rejected", "cancelled"}:
-        order.status = OrderStatus.failed.value
+        mark_order_unpaid(order, db, new_status=OrderStatus.failed.value, note=f"[MP] {status_mp}")
     db.commit()
     return {"order_status": order.status, "mp_status": status_mp}
 

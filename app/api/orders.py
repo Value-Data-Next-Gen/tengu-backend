@@ -11,6 +11,7 @@ from ..services.customer_auth import optional_customer
 from ..services.order_emails import send_order_created_email
 from ..services.rate_limit import client_ip, orders_create_limiter, orders_per_email_limiter
 from ..services.shipping import quote_shipping
+from ..services.stock import StockError, reserve_for_order
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -169,6 +170,16 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
         items=items,
     )
     db.add(order)
+    db.flush()  # asigna order.id sin cerrar la transacción
+    # Reserva el stock atómicamente. Re-lee stock_qty (que ya refleja reservas
+    # de otras órdenes pending), así que cierra el overselling: si entre la
+    # validación de arriba y este punto otra orden tomó las últimas unidades,
+    # acá falla y se revierte todo.
+    try:
+        reserve_for_order(db, order, strict=True)
+    except StockError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e)) from e
     db.commit()
     db.refresh(order)
     # Marcar el abandoned cart (si había) como recovered. Idempotente.

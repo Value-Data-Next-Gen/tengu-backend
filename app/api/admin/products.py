@@ -10,8 +10,17 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ...db import get_db
-from ...models import Product, Variant
-from ...schemas import ProductIn, ProductOut, ProductPatch, VariantIn
+from ...models import Product, StockMovement, Variant
+from ...schemas import (
+    ProductIn,
+    ProductOut,
+    ProductPatch,
+    RestockIn,
+    StockAdjustIn,
+    StockMovementOut,
+    VariantIn,
+)
+from ...services import stock
 from ...services.auth import require_admin
 from ...seed import SEED_IMAGES, UPLOADS_DIR, ensure_uploads_seeded
 
@@ -53,10 +62,17 @@ def list_categories(db: Session = Depends(get_db)) -> list[str]:
 
 
 @router.post("", response_model=AdminProductOut, status_code=201)
-def create_product(payload: ProductIn, db: Session = Depends(get_db)) -> Product:
+def create_product(
+    payload: ProductIn,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+) -> Product:
     existing = db.query(Product).filter(Product.slug == payload.slug).first()
     if existing:
         raise HTTPException(status_code=409, detail=f"Ya existe un producto con slug '{payload.slug}'")
+    # Las variantes nacen en 0 y el stock inicial entra como movimiento `seed`
+    # del kardex, para no romper el invariante (suma de movimientos == stock).
+    initial_stock = {v.size_g: v.stock_qty for v in payload.variants}
     product = Product(
         slug=payload.slug,
         name=payload.name,
@@ -80,13 +96,21 @@ def create_product(payload: ProductIn, db: Session = Depends(get_db)) -> Product
             Variant(
                 size_g=v.size_g,
                 price_clp=v.price_clp,
-                stock_qty=v.stock_qty,
+                stock_qty=0,
                 compare_at_price_clp=v.compare_at_price_clp,
             )
             for v in payload.variants
         ],
     )
     db.add(product)
+    db.flush()
+    for variant in product.variants:
+        qty = initial_stock.get(variant.size_g, 0)
+        if qty:
+            stock.apply_movement(
+                db, variant, qty, stock.SEED,
+                created_by=admin, note="Stock inicial al crear el producto",
+            )
     db.commit()
     db.refresh(product)
     return product
@@ -120,21 +144,33 @@ def delete_product(slug: str, db: Session = Depends(get_db)) -> None:
 
 
 @router.post("/{slug}/variants", response_model=AdminVariantOut, status_code=201)
-def add_variant(slug: str, payload: VariantIn, db: Session = Depends(get_db)) -> Variant:
+def add_variant(
+    slug: str,
+    payload: VariantIn,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+) -> Variant:
     product = db.query(Product).filter(Product.slug == slug).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
     duplicate = next((v for v in product.variants if v.size_g == payload.size_g), None)
     if duplicate:
         raise HTTPException(status_code=409, detail=f"Ya existe variante de {payload.size_g}g")
+    # Nace en 0; el stock inicial entra como movimiento `seed` del kardex.
     variant = Variant(
         product_id=product.id,
         size_g=payload.size_g,
         price_clp=payload.price_clp,
-        stock_qty=payload.stock_qty,
+        stock_qty=0,
         compare_at_price_clp=payload.compare_at_price_clp,
     )
     db.add(variant)
+    db.flush()
+    if payload.stock_qty:
+        stock.apply_movement(
+            db, variant, payload.stock_qty, stock.SEED,
+            created_by=admin, note="Stock inicial de la variante",
+        )
     db.commit()
     db.refresh(variant)
     return variant
@@ -157,7 +193,10 @@ def delete_variant(variant_id: int, db: Session = Depends(get_db)) -> None:
 
 @router.patch("/variants/{variant_id}", response_model=AdminVariantOut)
 def update_variant(
-    variant_id: int, payload: VariantUpdate, db: Session = Depends(get_db)
+    variant_id: int,
+    payload: VariantUpdate,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
 ) -> Variant:
     variant = db.get(Variant, variant_id)
     if not variant:
@@ -165,7 +204,12 @@ def update_variant(
     if payload.price_clp is not None:
         variant.price_clp = payload.price_clp
     if payload.stock_qty is not None:
-        variant.stock_qty = payload.stock_qty
+        # El stock SIEMPRE muta vía kardex: registramos el ajuste a valor
+        # absoluto en vez de pisar stock_qty directo.
+        stock.adjust_to(
+            db, variant, payload.stock_qty,
+            created_by=admin, note="Ajuste manual desde panel de productos",
+        )
     if payload.compare_at_price_clp is not None:
         # 0 (o cualquier valor que no sea estrictamente mayor a price_clp) lo
         # interpretamos como "limpiar la oferta" — no tiene sentido mostrar
@@ -174,6 +218,66 @@ def update_variant(
             variant.compare_at_price_clp = payload.compare_at_price_clp
         else:
             variant.compare_at_price_clp = None
+    db.commit()
+    db.refresh(variant)
+    return variant
+
+
+# --- Kardex de inventario ---
+
+
+@router.get("/variants/{variant_id}/movements", response_model=list[StockMovementOut])
+def list_variant_movements(
+    variant_id: int, limit: int = 100, db: Session = Depends(get_db)
+) -> list[StockMovement]:
+    """Kardex de una variante: movimientos más recientes primero."""
+    variant = db.get(Variant, variant_id)
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variante no encontrada")
+    return (
+        db.query(StockMovement)
+        .filter(StockMovement.variant_id == variant_id)
+        .order_by(StockMovement.created_at.desc(), StockMovement.id.desc())
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )
+
+
+@router.post("/variants/{variant_id}/restock", response_model=AdminVariantOut)
+def restock_variant(
+    variant_id: int,
+    payload: RestockIn,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+) -> Variant:
+    """Ingreso de inventario (+qty): nuevo tueste, compra de equipo, etc."""
+    variant = db.get(Variant, variant_id)
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variante no encontrada")
+    try:
+        stock.restock(db, variant, payload.qty, created_by=admin, note=payload.note)
+    except stock.StockError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    db.commit()
+    db.refresh(variant)
+    return variant
+
+
+@router.post("/variants/{variant_id}/adjust", response_model=AdminVariantOut)
+def adjust_variant(
+    variant_id: int,
+    payload: StockAdjustIn,
+    db: Session = Depends(get_db),
+    admin: str = Depends(require_admin),
+) -> Variant:
+    """Ajuste a valor absoluto (merma, corrección de conteo). Registra el delta."""
+    variant = db.get(Variant, variant_id)
+    if not variant:
+        raise HTTPException(status_code=404, detail="Variante no encontrada")
+    try:
+        stock.adjust_to(db, variant, payload.stock_qty, created_by=admin, note=payload.note)
+    except stock.StockError as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
     db.commit()
     db.refresh(variant)
     return variant

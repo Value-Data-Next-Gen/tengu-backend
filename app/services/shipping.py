@@ -17,12 +17,13 @@ COMUNAS_SEED_PATH = Path(__file__).resolve().parents[2] / "seed" / "comunas-chil
 
 # --- Tarifario Blue Express desde Rancagua (mayo 2026) ---
 # Origen fijo: Centro (Rancagua, O'Higgins).
-# Bandas de peso:
+# Bandas de peso CONTIGUAS (sin huecos): cada banda arranca 1g sobre el máximo
+# de la anterior, así ningún peso cae fuera de banda. weight_max_g inclusive.
 SIZE_BANDS = [
     ("XS", 0, 500),
-    ("S", 750, 3000),
-    ("M", 3250, 6000),
-    ("L", 6250, 20000),
+    ("S", 501, 3000),
+    ("M", 3001, 6000),
+    ("L", 6001, 20000),
 ]
 # 24 valores = 4 tallas × 3 zonas × 2 modalidades. CLP.
 SHIPPING_SEED = [

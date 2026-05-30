@@ -82,12 +82,15 @@ def _cancel_stale_pending_orders(db: Session) -> int:
         )
         .all()
     )
+    from .order_lifecycle import mark_order_unpaid
+
     for o in stale:
-        o.status = OrderStatus.canceled.value
-        tag = "[auto] cancelada por >24h sin pago iniciado"
-        existing = o.admin_notes or ""
-        if tag not in existing:
-            o.admin_notes = (existing + "\n" + tag).strip()[:1000]
+        # Cancela + libera la reserva de stock en el kardex (idempotente).
+        mark_order_unpaid(
+            o, db,
+            new_status=OrderStatus.canceled.value,
+            note="[auto] cancelada por >24h sin pago iniciado",
+        )
     if stale:
         db.commit()
     return len(stale)
