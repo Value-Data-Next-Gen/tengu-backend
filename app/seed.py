@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .models import Category, Post, Product, Variant
+from .models import Category, HeroSlide, Post, Product, Variant
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -102,6 +102,26 @@ def seed_products(db: Session) -> int:
 
     db.commit()
     return len(data)
+
+
+# Slides default del hero: mismos base names que servía HeroCarousel hardcodeado.
+# title vacío → el frontend usa el titular por defecto (conserva el diseño).
+DEFAULT_HERO_SLIDES = [
+    {"image": "hero-bg", "eyebrow": "Tostado en Chile", "sort_order": 10},
+    {"image": "hero-bag", "eyebrow": "Origen único", "sort_order": 20},
+    {"image": "hero-atmosphere", "eyebrow": "Café de especialidad", "sort_order": 30},
+]
+
+
+def seed_hero_slides(db: Session) -> int:
+    """Siembra los slides default del carrusel si la tabla está vacía. Idempotente:
+    una vez que el admin tiene slides (default o propios), no vuelve a tocarla."""
+    if db.query(HeroSlide).count() > 0:
+        return 0
+    for entry in DEFAULT_HERO_SLIDES:
+        db.add(HeroSlide(**entry))
+    db.commit()
+    return len(DEFAULT_HERO_SLIDES)
 
 
 def seed_posts(db: Session) -> int:

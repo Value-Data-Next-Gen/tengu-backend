@@ -594,6 +594,43 @@ class DiscountCode(Base):
     )
 
 
+class HeroSlide(Base):
+    """Slide del carrusel del home, editable desde /admin/carrusel.
+
+    Permite armar promos/publicidad (Cyber, Black Friday) sin redeploy. El
+    frontend renderiza los slides activos y vigentes, ordenados por sort_order.
+    Si `title` queda vacío, el frontend usa el titular por defecto del hero
+    (así los slides "default" conservan el diseño original).
+
+    `image` puede ser:
+    - un nombre base sin extensión (ej. 'hero-bg') → el front usa el <picture>
+      responsive servido desde /public (slides default).
+    - una ruta/URL (ej. '/uploads/cyber.webp' o 'https://…') → <img> directo.
+    """
+    __tablename__ = "hero_slides"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    image: Mapped[str] = mapped_column(String(300))
+    eyebrow: Mapped[str] = mapped_column(String(80), default="")
+    title: Mapped[str] = mapped_column(String(160), default="")
+    subtitle: Mapped[str] = mapped_column(String(400), default="")
+    cta_label: Mapped[str] = mapped_column(String(60), default="")
+    cta_url: Mapped[str] = mapped_column(String(300), default="")
+    sort_order: Mapped[int] = mapped_column(Integer, default=100, index=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    # Ventana de vigencia opcional (para programar promos). Null = sin límite.
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class HorecaLead(Base):
     __tablename__ = "horeca_leads"
 

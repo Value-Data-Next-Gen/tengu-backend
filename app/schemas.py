@@ -461,6 +461,56 @@ class ProductPatch(BaseModel):
         return v
 
 
+# --- Hero carousel (home) ---
+
+
+class HeroSlideOut(BaseModel):
+    """Forma pública: solo lo que el carrusel necesita renderizar."""
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    image: str
+    eyebrow: str
+    title: str
+    subtitle: str
+    cta_label: str
+    cta_url: str
+
+
+class HeroSlideAdminOut(HeroSlideOut):
+    sort_order: int
+    is_active: bool
+    starts_at: datetime | None
+    ends_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class HeroSlideIn(BaseModel):
+    image: str = Field(min_length=1, max_length=300)
+    eyebrow: str = Field(default="", max_length=80)
+    title: str = Field(default="", max_length=160)
+    subtitle: str = Field(default="", max_length=400)
+    cta_label: str = Field(default="", max_length=60)
+    cta_url: str = Field(default="", max_length=300)
+    sort_order: int = Field(default=100, ge=0, le=10000)
+    is_active: bool = True
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+
+
+class HeroSlidePatch(BaseModel):
+    image: str | None = Field(default=None, min_length=1, max_length=300)
+    eyebrow: str | None = Field(default=None, max_length=80)
+    title: str | None = Field(default=None, max_length=160)
+    subtitle: str | None = Field(default=None, max_length=400)
+    cta_label: str | None = Field(default=None, max_length=60)
+    cta_url: str | None = Field(default=None, max_length=300)
+    sort_order: int | None = Field(default=None, ge=0, le=10000)
+    is_active: bool | None = None
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+
+
 # --- Kardex / inventario (admin) ---
 
 

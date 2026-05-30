@@ -23,7 +23,7 @@ from .api import subscriptions as subscriptions_api
 from .api.admin import router as admin_router
 from .config import assert_production_secrets, settings
 from .db import Base, SessionLocal, engine
-from .seed import UPLOADS_DIR, ensure_uploads_seeded, seed_posts, seed_products
+from .seed import UPLOADS_DIR, ensure_uploads_seeded, seed_hero_slides, seed_posts, seed_products
 from .services.shipping import ensure_seeded as ensure_shipping_seeded
 from .services.subscriptions_cron import subscription_cron_loop
 
@@ -169,6 +169,7 @@ async def lifespan(_: FastAPI):
         with SessionLocal() as db:
             seed_products(db)
             seed_posts(db)
+            seed_hero_slides(db)
             ensure_shipping_seeded(db)
     # Kardex: siembra el saldo de apertura para variantes preexistentes que aún
     # no tengan movimientos (idempotente), para que la suma del ledger cuadre
