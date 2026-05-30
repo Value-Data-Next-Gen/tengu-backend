@@ -474,6 +474,7 @@ class HeroSlideOut(BaseModel):
     subtitle: str
     cta_label: str
     cta_url: str
+    image_has_text: bool = False
 
 
 class HeroSlideAdminOut(HeroSlideOut):
@@ -492,6 +493,7 @@ class HeroSlideIn(BaseModel):
     subtitle: str = Field(default="", max_length=400)
     cta_label: str = Field(default="", max_length=60)
     cta_url: str = Field(default="", max_length=300)
+    image_has_text: bool = False
     sort_order: int = Field(default=100, ge=0, le=10000)
     is_active: bool = True
     starts_at: datetime | None = None
@@ -505,6 +507,7 @@ class HeroSlidePatch(BaseModel):
     subtitle: str | None = Field(default=None, max_length=400)
     cta_label: str | None = Field(default=None, max_length=60)
     cta_url: str | None = Field(default=None, max_length=300)
+    image_has_text: bool | None = None
     sort_order: int | None = Field(default=None, ge=0, le=10000)
     is_active: bool | None = None
     starts_at: datetime | None = None

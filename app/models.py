@@ -616,6 +616,9 @@ class HeroSlide(Base):
     subtitle: Mapped[str] = mapped_column(String(400), default="")
     cta_label: Mapped[str] = mapped_column(String(60), default="")
     cta_url: Mapped[str] = mapped_column(String(300), default="")
+    # Si True, la imagen YA trae el texto: el carrusel no superpone título/CTA
+    # y la muestra completa (object-contain) para no recortarla.
+    image_has_text: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=100, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     # Ventana de vigencia opcional (para programar promos). Null = sin límite.

@@ -82,6 +82,12 @@ def _migrate_add_missing_columns() -> None:
         if "grind" not in oi_cols:
             statements.append("ALTER TABLE order_items ADD COLUMN grind VARCHAR(40) DEFAULT 'grano-entero'")
 
+    # hero_slides.image_has_text (slides que ya traen el texto en la imagen)
+    if inspector.has_table("hero_slides"):
+        hs_cols = {c["name"] for c in inspector.get_columns("hero_slides")}
+        if "image_has_text" not in hs_cols:
+            statements.append("ALTER TABLE hero_slides ADD COLUMN image_has_text BOOLEAN DEFAULT 0")
+
     # variants.compare_at_price_clp para precios tachados (oferta)
     if inspector.has_table("variants"):
         var_cols = {c["name"] for c in inspector.get_columns("variants")}
