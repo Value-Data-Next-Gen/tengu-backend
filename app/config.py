@@ -1,3 +1,4 @@
+import logging
 import os
 import secrets
 
@@ -138,22 +139,26 @@ def assert_production_secrets() -> None:
         raise RuntimeError(
             f"FRONTEND_URL debe ser un URL https:// en producción. Valor actual: {settings.frontend_url!r}"
         )
+    # Los siguientes dos NO abortan el arranque (no queremos tumbar prod si aún
+    # falta configurarlos), pero quedan como WARNING ruidoso en logs hasta que
+    # se resuelvan. Son deuda de seguridad/operación conocida.
     if settings.mp_environment.lower() == "live" and not settings.mp_cs_wbhk:
         # Sin la clave secreta del webhook, /mercadopago/notify acepta cualquier
-        # POST (modo permisivo). En producción con MP en vivo eso es falsificable:
-        # alguien con un payment_id aprobado real podría degradar/forzar órdenes.
-        raise RuntimeError(
-            "MP_CS_WBHK no configurado con MP_ENVIRONMENT=live — "
-            "setea la clave secreta del webhook (panel MP → Webhooks → Configurar firma) "
-            "para validar la firma de /mercadopago/notify en producción."
+        # POST (modo permisivo). Con MP en vivo eso es falsificable: alguien con
+        # un payment_id aprobado real podría degradar/forzar órdenes.
+        logging.getLogger(__name__).warning(
+            "SEGURIDAD: MP_CS_WBHK vacío con MP_ENVIRONMENT=live — el webhook de "
+            "Mercado Pago acepta cualquier POST (falsificable). Configura la clave "
+            "secreta del webhook (panel MP → Webhooks → Configurar firma)."
         )
     if settings.smtp_host in ("", "__console__"):
         # En prod sin SMTP real los emails de orden creada / pago confirmado /
         # aviso al admin se imprimen en consola pero nunca se envían.
-        raise RuntimeError(
-            "SMTP_HOST sin configurar en producción (sigue en __console__) — "
-            "los emails transaccionales no se enviarían. Configura un SMTP real "
-            "(Resend, Brevo, etc.) vía las env vars SMTP_*."
+        logging.getLogger(__name__).warning(
+            "OPERACIÓN: SMTP_HOST sigue en %r en producción — los emails "
+            "transaccionales NO se envían. Configura un SMTP real (Resend, Brevo, "
+            "etc.) vía las env vars SMTP_*.",
+            settings.smtp_host,
         )
     if not settings.uploads_dir.startswith("/home/"):
         # En Azure App Service /home es la única zona persistente. Sin esto,
