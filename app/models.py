@@ -261,6 +261,34 @@ class AdminLoginToken(Base):
     )
 
 
+class AdminUser(Base):
+    """Cuenta de administrador del panel /admin.
+
+    Reemplaza el esquema viejo de 'un password compartido + lista de emails'.
+    - role 'super_admin': puede gestionar usuarios y resetear contraseñas.
+    - role 'admin': opera la tienda, cambia su propia contraseña.
+
+    Transición sin lockout: si password_hash es None, el login acepta la
+    contraseña compartida (ADMIN_PASSWORD) como fallback hasta que el usuario
+    setee la suya. Una vez seteada, solo vale su hash.
+    """
+    __tablename__ = "admin_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    role: Mapped[str] = mapped_column(String(20), default="admin")  # 'super_admin' | 'admin'
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class Customer(Base):
     """Cuenta de cliente (público). Se crea con upsert al confirmar una orden,
     o explícitamente desde /api/auth/request-link. Login = magic link al email.

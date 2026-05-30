@@ -1,4 +1,6 @@
-"""Magic link auth + JWT sessions for admin."""
+"""Magic link auth + JWT sessions for admin + cuentas AdminUser con roles."""
+import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -8,7 +10,32 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import AdminLoginToken
+from ..models import AdminLoginToken, AdminUser
+
+
+# --- Hash de contraseñas (pbkdf2, stdlib — sin dependencias extra) ---
+
+_PBKDF2_ITERATIONS = 200_000
+
+
+def hash_password(password: str) -> str:
+    """Devuelve 'pbkdf2_sha256$iters$salt_hex$hash_hex'."""
+    salt = secrets.token_bytes(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, _PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
+
+
+def verify_password(password: str, stored: str | None) -> bool:
+    if not stored:
+        return False
+    try:
+        algo, iters, salt_hex, hash_hex = stored.split("$")
+        if algo != "pbkdf2_sha256":
+            return False
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt_hex), int(iters))
+        return hmac.compare_digest(dk.hex(), hash_hex)
+    except (ValueError, AttributeError):
+        return False
 
 
 def generate_login_token(db: Session, email: str) -> str:
@@ -37,13 +64,14 @@ def consume_login_token(db: Session, token: str) -> str | None:
     return row.email
 
 
-def issue_session_jwt(email: str) -> str:
+def issue_session_jwt(email: str, role: str = "admin") -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": email,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(hours=settings.session_ttl_hours)).timestamp()),
         "scope": "admin",
+        "role": role,
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
@@ -55,7 +83,10 @@ def decode_session_jwt(token: str) -> dict | None:
         return None
 
 
-def require_admin(request: Request, _: Session = Depends(get_db)) -> str:
+def current_admin_user(request: Request, db: Session = Depends(get_db)) -> AdminUser:
+    """Valida el JWT y carga el AdminUser activo. La autoridad vive en la DB
+    (rol/estado en vivo), no en el JWT — así desactivar o cambiar rol aplica al
+    instante."""
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sin sesión")
@@ -63,7 +94,22 @@ def require_admin(request: Request, _: Session = Depends(get_db)) -> str:
     payload = decode_session_jwt(token)
     if not payload or payload.get("scope") != "admin":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sesión inválida")
-    email = payload.get("sub")
-    if not email or email.lower() not in settings.admin_emails_list:
+    email = (payload.get("sub") or "").lower()
+    user = db.query(AdminUser).filter(AdminUser.email == email).first()
+    if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado")
-    return email
+    return user
+
+
+def require_admin(request: Request, db: Session = Depends(get_db)) -> str:
+    """Dependencia: cualquier admin activo. Devuelve el email (varios endpoints
+    lo usan como created_by)."""
+    return current_admin_user(request, db).email
+
+
+def require_super_admin(request: Request, db: Session = Depends(get_db)) -> AdminUser:
+    """Dependencia: solo super_admin. Devuelve el AdminUser."""
+    user = current_admin_user(request, db)
+    if user.role != "super_admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Requiere super admin")
+    return user

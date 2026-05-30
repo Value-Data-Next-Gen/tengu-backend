@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .models import Category, HeroSlide, Post, Product, Variant
+from .models import AdminUser, Category, HeroSlide, Post, Product, Variant
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -122,6 +122,37 @@ def seed_hero_slides(db: Session) -> int:
         db.add(HeroSlide(**entry))
     db.commit()
     return len(DEFAULT_HERO_SLIDES)
+
+
+# Cuentas admin iniciales. password_hash None → login con la compartida hasta
+# que cada uno setee la suya (transición sin lockout).
+DEFAULT_ADMIN_USERS = [
+    ("fchamorroh@outlook.com", "super_admin"),
+    ("g.rojaschacon@gmail.com", "super_admin"),  # dev/mantención
+    ("tenguroastery@gmail.com", "admin"),
+]
+
+
+def seed_admin_users(db: Session) -> int:
+    """Siembra las cuentas admin si faltan (idempotente). Además, defensivo:
+    cualquier email en ADMIN_EMAILS que no esté queda como admin, para no dejar
+    afuera a un admin configurado por env."""
+    existing = {u.email for u in db.query(AdminUser).all()}
+    added = 0
+    for email, role in DEFAULT_ADMIN_USERS:
+        e = email.lower().strip()
+        if e not in existing:
+            db.add(AdminUser(email=e, role=role, password_hash=None, is_active=True))
+            existing.add(e)
+            added += 1
+    for e in settings.admin_emails_list:
+        if e not in existing:
+            db.add(AdminUser(email=e, role="admin", password_hash=None, is_active=True))
+            existing.add(e)
+            added += 1
+    if added:
+        db.commit()
+    return added
 
 
 def seed_posts(db: Session) -> int:

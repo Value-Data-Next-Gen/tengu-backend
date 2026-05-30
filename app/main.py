@@ -23,7 +23,7 @@ from .api import subscriptions as subscriptions_api
 from .api.admin import router as admin_router
 from .config import assert_production_secrets, settings
 from .db import Base, SessionLocal, engine
-from .seed import UPLOADS_DIR, ensure_uploads_seeded, seed_hero_slides, seed_posts, seed_products
+from .seed import UPLOADS_DIR, ensure_uploads_seeded, seed_admin_users, seed_hero_slides, seed_posts, seed_products
 from .services.shipping import ensure_seeded as ensure_shipping_seeded
 from .services.subscriptions_cron import subscription_cron_loop
 
@@ -183,6 +183,9 @@ async def lifespan(_: FastAPI):
     with SessionLocal() as db:
         from .services.stock import ensure_opening_balances
         ensure_opening_balances(db)
+        # Cuentas admin (siempre, no depende de seed_on_startup): sin esto nadie
+        # podría loguear porque el login valida contra AdminUser.
+        seed_admin_users(db)
     # Arranca el cron de suscripciones (no bloquea el startup)
     cron_task = asyncio.create_task(subscription_cron_loop())
     try:

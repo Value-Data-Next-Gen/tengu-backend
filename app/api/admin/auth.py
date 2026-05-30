@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from ...config import settings
 from ...db import get_db
-from ...services.auth import issue_session_jwt, require_admin
+from ...models import AdminUser
+from ...services.auth import (
+    current_admin_user,
+    issue_session_jwt,
+    verify_password,
+)
 
 router = APIRouter()
 
@@ -19,32 +24,41 @@ class LoginIn(BaseModel):
 class LoginOut(BaseModel):
     jwt: str
     email: str
+    role: str
     expires_in_hours: int
 
 
 class MeOut(BaseModel):
     email: str
+    role: str
 
 
 @router.post("/login", response_model=LoginOut)
-def login(payload: LoginIn, _: Session = Depends(get_db)) -> LoginOut:
-    """Login simple con email + password. El email debe estar en ADMIN_EMAILS y el
-    password debe coincidir con ADMIN_PASSWORD. Devuelve JWT 72h."""
+def login(payload: LoginIn, db: Session = Depends(get_db)) -> LoginOut:
+    """Login con email + password contra AdminUser. Si el usuario aún no seteó su
+    contraseña (password_hash None), se acepta la compartida ADMIN_PASSWORD como
+    fallback (transición sin lockout). Devuelve JWT con el rol."""
     email = payload.email.lower().strip()
-    if email not in settings.admin_emails_list:
+    user = db.query(AdminUser).filter(AdminUser.email == email).first()
+    if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
-    # comparación constante en tiempo para evitar timing attacks
-    if not hmac.compare_digest(payload.password, settings.admin_password):
+    if user.password_hash:
+        ok = verify_password(payload.password, user.password_hash)
+    else:
+        # Fallback: contraseña compartida hasta que el usuario setee la propia.
+        ok = hmac.compare_digest(payload.password, settings.admin_password)
+    if not ok:
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
 
     return LoginOut(
-        jwt=issue_session_jwt(email),
+        jwt=issue_session_jwt(email, user.role),
         email=email,
+        role=user.role,
         expires_in_hours=settings.session_ttl_hours,
     )
 
 
 @router.get("/me", response_model=MeOut)
-def me(email: str = Depends(require_admin)) -> MeOut:
-    return MeOut(email=email)
+def me(user: AdminUser = Depends(current_admin_user)) -> MeOut:
+    return MeOut(email=user.email, role=user.role)
