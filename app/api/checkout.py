@@ -1,14 +1,15 @@
 import hashlib
 import hmac
+import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db import get_db
-from ..models import Order, OrderStatus
+from ..models import Order, OrderStatus, Product
 from ..schemas import (
     CheckoutInitIn,
     CouponValidateIn,
@@ -21,6 +22,8 @@ from ..services import khipu, mercadopago, webpay
 from ..services.coupons import evaluate_coupon
 from ..services.order_lifecycle import mark_order_paid, mark_order_unpaid
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/checkout", tags=["checkout"])
 
 
@@ -30,6 +33,17 @@ def validate_coupon(payload: CouponValidateIn, db: Session = Depends(get_db)) ->
     Solo previsualiza el descuento; la aplicación real ocurre server-side
     en POST /api/orders (que re-valida)."""
     items_dicts = [it.model_dump() for it in payload.items]
+    # applies_to='category' necesita la categoría de cada item; el front solo
+    # manda product_slug, así que la resolvemos acá (igual que create_order).
+    # Sin esto, los cupones de categoría siempre fallaban en el preview.
+    slugs = [d["product_slug"] for d in items_dicts if d.get("product_slug")]
+    if slugs:
+        categories = dict(
+            db.query(Product.slug, Product.category).filter(Product.slug.in_(slugs)).all()
+        )
+        for d in items_dicts:
+            if not d.get("category"):
+                d["category"] = categories.get(d.get("product_slug"))
     discount, error, coupon = evaluate_coupon(
         db, payload.code, subtotal_clp=payload.subtotal_clp, items=items_dicts
     )
@@ -188,7 +202,11 @@ def khipu_init(payload: CheckoutInitIn, db: Session = Depends(get_db)) -> KhipuI
         raise HTTPException(status_code=409, detail="La orden ya fue procesada")
 
     backend_base = settings.webpay_return_url.rsplit("/api/", 1)[0]  # http://host[:port]
-    return_url = f"{settings.frontend_url}/checkout/khipu/return?order_id={order.id}"
+    # token: /thanks lo exige para leer la orden; sin él el cliente que paga
+    # por Khipu aterrizaba en "Falta el token de acceso a la orden".
+    return_url = (
+        f"{settings.frontend_url}/checkout/khipu/return?order_id={order.id}&token={order.access_token}"
+    )
     cancel_url = f"{settings.frontend_url}/checkout/error?status=canceled&order_id={order.id}"
     notify_url = f"{backend_base}/api/checkout/khipu/notify"
 
@@ -245,18 +263,32 @@ async def khipu_notify(request: Request, db: Session = Depends(get_db)) -> dict:
     if not order:
         raise HTTPException(status_code=404, detail="Orden no encontrada para ese pago")
 
-    order.khipu_response = payment
-    if payment.get("status") == "done":
-        mark_order_paid(order, db)
-    elif payment.get("status") in {"expired", "rejected"}:
-        if order.status == OrderStatus.pending.value:
-            mark_order_unpaid(
-                order, db, new_status=OrderStatus.failed.value,
-                note=f"[Khipu] {payment.get('status')}",
-            )
-
+    _apply_khipu_status(order, payment, db)
     db.commit()
     return {"ok": True, "status": payment.get("status")}
+
+
+def _apply_khipu_status(order: Order, payment: dict, db: Session) -> None:
+    """Aplica el estado de un payment Khipu a la orden (compartido notify/verify).
+    Valida el monto antes de marcar paid — misma tolerancia ±2 CLP que Webpay/MP;
+    sin esto un cobro 'done' por un monto distinto despachaba el pedido completo."""
+    order.khipu_response = payment
+    status = payment.get("status")
+    if status == "done":
+        paid_amount = round(float(payment.get("amount") or 0))
+        if abs(paid_amount - order.total_clp) <= 2:
+            mark_order_paid(order, db)
+        else:
+            existing = order.admin_notes or ""
+            tag = f"[Khipu] amount_mismatch: recibido {paid_amount} ≠ esperado {order.total_clp}"
+            if "[Khipu] amount_mismatch" not in existing:
+                order.admin_notes = (existing + "\n" + tag).strip()[:1000]
+            if order.status == OrderStatus.pending.value:
+                mark_order_unpaid(order, db, new_status=OrderStatus.failed.value)
+    elif status in {"expired", "rejected"} and order.status == OrderStatus.pending.value:
+        mark_order_unpaid(
+            order, db, new_status=OrderStatus.failed.value, note=f"[Khipu] {status}"
+        )
 
 
 async def _maybe_json(request: Request) -> dict:
@@ -267,15 +299,20 @@ async def _maybe_json(request: Request) -> dict:
 
 
 @router.post("/khipu/verify/{order_id}")
-def khipu_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
+def khipu_verify(
+    order_id: int,
+    token: str = Query(..., min_length=8, max_length=64),
+    db: Session = Depends(get_db),
+) -> dict:
     """Re-verifica con Khipu el estado del pago de la orden y actualiza la BD.
 
     Útil cuando el usuario vuelve de Khipu antes de que llegue el webhook
     (típico en dev local donde el webhook no puede llegar a localhost) o
-    cuando el webhook se perdió.
+    cuando el webhook se perdió. Exige el access_token de la orden para que
+    un tercero no pueda disparar transiciones/emails enumerando order_ids.
     """
     order = db.get(Order, order_id)
-    if not order or not order.khipu_payment_id:
+    if not order or not hmac.compare_digest(order.access_token, token) or not order.khipu_payment_id:
         raise HTTPException(status_code=404, detail="Orden o pago no encontrado")
 
     if not khipu.is_configured():
@@ -286,15 +323,7 @@ def khipu_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
     except khipu.KhipuError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
-    order.khipu_response = payment
-    if payment.get("status") == "done":
-        mark_order_paid(order, db)
-    elif payment.get("status") in {"expired", "rejected"} and order.status == OrderStatus.pending.value:
-        mark_order_unpaid(
-            order, db, new_status=OrderStatus.failed.value,
-            note=f"[Khipu] {payment.get('status')}",
-        )
-
+    _apply_khipu_status(order, payment, db)
     db.commit()
     return {"order_status": order.status, "khipu_status": payment.get("status")}
 
@@ -313,23 +342,37 @@ def mercadopago_init(payload: CheckoutInitIn, db: Session = Depends(get_db)) -> 
     if order.status != OrderStatus.pending.value:
         raise HTTPException(status_code=409, detail="La orden ya fue procesada")
 
-    items = [
-        {
-            "title": f"{it.product_name} {it.size_g}g",
-            "quantity": it.quantity,
-            "unit_price": it.unit_price_clp,
-            "currency_id": "CLP",
-        }
-        for it in order.items  # type: ignore[attr-defined]
-    ]
-    # Envío como item separado para que el monto total cuadre con order.total_clp
-    if order.shipping_cost_clp > 0:
-        items.append({
-            "title": "Envío",
+    if order.discount_clp > 0:
+        # MP no acepta items con precio negativo, así que con cupón se manda
+        # un único item por el total final. Sin esto MP cobra el subtotal sin
+        # descuento y el webhook marca la orden como failed por monto distinto.
+        label = f"Pedido Tengu #{order.id}"
+        if order.coupon_code:
+            label += f" (cupón {order.coupon_code})"
+        items = [{
+            "title": label,
             "quantity": 1,
-            "unit_price": order.shipping_cost_clp,
+            "unit_price": order.total_clp,
             "currency_id": "CLP",
-        })
+        }]
+    else:
+        items = [
+            {
+                "title": f"{it.product_name} {it.size_g}g",
+                "quantity": it.quantity,
+                "unit_price": it.unit_price_clp,
+                "currency_id": "CLP",
+            }
+            for it in order.items  # type: ignore[attr-defined]
+        ]
+        # Envío como item separado para que el monto total cuadre con order.total_clp
+        if order.shipping_cost_clp > 0:
+            items.append({
+                "title": "Envío",
+                "quantity": 1,
+                "unit_price": order.shipping_cost_clp,
+                "currency_id": "CLP",
+            })
 
     backend_base = settings.webpay_return_url.rsplit("/api/", 1)[0]
     success_url = f"{settings.frontend_url}/thanks/{order.id}?status=paid&token={order.access_token}"
@@ -382,15 +425,23 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
     if topic.lower() not in {"payment", "topic_payment_wh"} or not payment_id:
         return {"ok": True, "ignored": True, "topic": topic}
 
-    # Verificación HMAC del header x-signature. Solo aplica si MP_CS_WBHK está
-    # configurado. Esto bloquea webhooks falsificados que conozcan order_id.
+    # Verificación HMAC del header x-signature, solo informativa: MP manda cada
+    # pago en DOS formatos — webhook v2 (data.id + type, firmado) e IPN legacy
+    # (id + topic, SIN x-signature). Rechazar con 401 hacía que MP reintentara
+    # el IPN para siempre y, si el webhook firmado fallaba, el pago nunca se
+    # procesaba. La seguridad real está abajo: re-consultamos el payment a la
+    # API de MP con nuestro token (un webhook falsificado no puede inyectar
+    # pagos ajenos) y validamos el monto contra la orden.
     valid = _verify_mp_signature(
         x_signature=request.headers.get("x-signature"),
         x_request_id=request.headers.get("x-request-id"),
         data_id=str(payment_id),
     )
     if not valid:
-        raise HTTPException(status_code=401, detail="Firma del webhook inválida")
+        logger.warning(
+            "mp_notify firma inválida/ausente (payment_id=%s, topic=%s) — se procesa igual via API",
+            payment_id, topic,
+        )
 
     try:
         payment = mercadopago.get_payment(str(payment_id))
@@ -398,7 +449,8 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
         raise HTTPException(status_code=502, detail=str(e)) from e
 
     # Vincular el payment con la order vía external_reference = "tengu-{id}".
-    external_ref = payment.get("external_reference", "")
+    # `or ""`: MP puede mandar el campo presente pero null (visto en prod 2026-06-03).
+    external_ref = payment.get("external_reference") or ""
     if not external_ref.startswith("tengu-"):
         return {"ok": True, "ignored": True, "reason": "external_reference no es de Tengu"}
     try:
@@ -453,16 +505,22 @@ async def mercadopago_notify(request: Request, db: Session = Depends(get_db)) ->
 
 
 @router.post("/mercadopago/verify/{order_id}")
-def mercadopago_verify(order_id: int, db: Session = Depends(get_db)) -> dict:
+def mercadopago_verify(
+    order_id: int,
+    token: str = Query(..., min_length=8, max_length=64),
+    db: Session = Depends(get_db),
+) -> dict:
     """Re-verifica con MP el estado del pago de la orden y actualiza la DB.
     Útil cuando el webhook se perdió (cold start Azure) o el usuario vuelve a
     /thanks antes que MP llame al notify. Misma lógica que mercadopago_notify
-    pero buscando el payment por external_reference."""
+    pero buscando el payment por external_reference. Exige el access_token de
+    la orden: sin él, un tercero podía resucitar a paid una orden que el admin
+    dejó failed a propósito, o disparar emails enumerando order_ids."""
     if not mercadopago.is_configured():
         raise HTTPException(status_code=503, detail="Mercado Pago no está configurado")
 
     order = db.get(Order, order_id)
-    if not order:
+    if not order or not hmac.compare_digest(order.access_token, token):
         raise HTTPException(status_code=404, detail="Orden no encontrada")
     if not order.mp_preference_id:
         raise HTTPException(status_code=404, detail="Orden no tiene pago MP iniciado")

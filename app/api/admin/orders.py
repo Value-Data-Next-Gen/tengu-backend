@@ -104,6 +104,15 @@ def update_order(order_id: int, payload: OrderUpdate, db: Session = Depends(get_
                 note=f"[admin] estado → {new_status}",
             )
         else:
+            # shipped/delivered solo desde un estado que pasó por pago: desde
+            # failed/pending el stock no está reservado y el pedido no se cobró.
+            if new_status in (OrderStatus.shipped.value, OrderStatus.delivered.value) and order.status not in (
+                OrderStatus.paid.value, OrderStatus.shipped.value, OrderStatus.delivered.value,
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="La orden debe estar pagada antes de marcarla enviada/entregada",
+                )
             order.status = new_status
             if new_status == OrderStatus.shipped.value and not order.shipped_at:
                 order.shipped_at = datetime.now(timezone.utc)

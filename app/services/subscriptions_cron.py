@@ -9,6 +9,7 @@ Se arranca desde el lifespan de FastAPI."""
 import asyncio
 from datetime import datetime, timedelta, timezone
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -79,21 +80,46 @@ def _cancel_stale_pending_orders(db: Session) -> int:
             Order.mp_payment_id.is_(None),
             Order.khipu_payment_id.is_(None),
             Order.webpay_token.is_(None),
+            # Transferencia bancaria espera confirmación manual del admin
+            # (el cliente puede demorar días) — no expirarla automáticamente.
+            or_(Order.payment_method.is_(None), Order.payment_method != "bank_transfer"),
         )
         .all()
     )
-    from .order_lifecycle import mark_order_unpaid
+    from . import mercadopago
+    from .order_lifecycle import mark_order_paid, mark_order_unpaid
 
+    cancelled = 0
     for o in stale:
+        # Si la orden inició pago en MP, confirmar con la API antes de
+        # cancelar: recupera pagos cuyo webhook se perdió (cold start Azure)
+        # en vez de cancelar una venta real.
+        if o.mp_preference_id and mercadopago.is_configured():
+            try:
+                payments = mercadopago.search_payments_by_external_reference(f"tengu-{o.id}")
+            except Exception as e:
+                print(f"[orders-cleanup] no se pudo verificar MP para orden {o.id}: {e}")
+                continue  # sin confirmación, no cancelar todavía
+            approved = [p for p in payments if p.get("status") == "approved"]
+            if approved:
+                payment = max(approved, key=lambda p: p.get("date_created") or "")
+                paid_amount = round(float(payment.get("transaction_amount") or 0))
+                if abs(paid_amount - o.total_clp) <= 2:
+                    o.mp_payment_id = str(payment.get("id", ""))
+                    o.mp_response = payment
+                    mark_order_paid(o, db)
+                    print(f"[orders-cleanup] orden {o.id} recuperada como paid desde MP")
+                    continue
         # Cancela + libera la reserva de stock en el kardex (idempotente).
         mark_order_unpaid(
             o, db,
             new_status=OrderStatus.canceled.value,
-            note="[auto] cancelada por >24h sin pago iniciado",
+            note="[auto] cancelada por >24h sin pago confirmado",
         )
+        cancelled += 1
     if stale:
         db.commit()
-    return len(stale)
+    return cancelled
 
 
 async def subscription_cron_loop():

@@ -9,6 +9,7 @@ from ..schemas import OrderCreatedOut, OrderIn, OrderOut
 from ..services.coupons import evaluate_coupon
 from ..services.customer_auth import optional_customer
 from ..services.order_emails import send_order_created_email
+from ..services.order_lifecycle import mark_order_paid
 from ..services.rate_limit import client_ip, orders_create_limiter, orders_per_email_limiter
 from ..services.shipping import quote_shipping
 from ..services.stock import StockError, reserve_for_order
@@ -182,6 +183,13 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
         raise HTTPException(status_code=409, detail=str(e)) from e
     db.commit()
     db.refresh(order)
+    if order.total_clp == 0:
+        # Cupón 100% + retiro: no hay nada que cobrar. Las pasarelas rechazan
+        # montos 0 (MP: "unit_price must be greater than 0"), así que se
+        # confirma de inmediato sin pasar por checkout de pago.
+        mark_order_paid(order, db)
+        db.commit()
+        db.refresh(order)
     # Marcar el abandoned cart (si había) como recovered. Idempotente.
     cart = (
         db.query(AbandonedCart)

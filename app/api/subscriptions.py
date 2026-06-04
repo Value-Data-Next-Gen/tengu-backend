@@ -8,6 +8,7 @@ from ..db import get_db
 from ..models import CoffeeSubscription, Order, OrderItem, Product, ShippingMethod
 from ..schemas import SubscriptionCreateOut, SubscriptionIn, SubscriptionOut
 from ..services.shipping import get_settings, quote_shipping
+from ..services.stock import reserve_for_order
 
 router = APIRouter(prefix="/api/subscriptions", tags=["subscriptions"])
 
@@ -84,6 +85,11 @@ def _build_order_from_sub(
     )
     db.add(order)
     db.flush()
+    # Reserva el stock en el kardex igual que una orden normal. strict=False:
+    # si no alcanza, la orden igual se crea (clamp a 0) y el admin ve el
+    # quiebre; sin esto el inventario comprometido por suscripciones quedaba
+    # invisible y la misma unidad podía venderse dos veces en la tienda.
+    reserve_for_order(db, order, strict=False)
     return order
 
 

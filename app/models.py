@@ -2,10 +2,32 @@ import secrets
 from datetime import datetime, timezone
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String
+from sqlalchemy import DateTime as _SADateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import TypeDecorator
 
 from .db import Base
+
+
+class DateTime(TypeDecorator):
+    """Todas las columnas datetime guardan UTC. SQLite descarta la tzinfo al
+    escribir; este wrapper la repone al leer, para que Pydantic serialice ISO
+    con offset (+00:00) y el frontend convierta bien a hora de Chile. Sin esto,
+    `new Date("...sin tz")` en JS interpreta el UTC como hora local (desfase ~4h)."""
+
+    impl = _SADateTime
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is not None:
+            value = value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
 
 
 def _gen_access_token() -> str:

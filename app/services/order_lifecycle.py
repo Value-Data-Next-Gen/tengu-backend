@@ -93,6 +93,7 @@ def mark_order_unpaid(
     if note:
         _append_admin_note(order, note)
     stock.release_for_order(db, order, note=note)
+    _decrement_coupon_used_count(order, db)
 
 
 def _increment_coupon_used_count(order: Order, db: Session) -> None:
@@ -107,6 +108,20 @@ def _increment_coupon_used_count(order: Order, db: Session) -> None:
     if coupon:
         coupon.used_count = (coupon.used_count or 0) + 1
     order.coupon_counted_at = datetime.now(timezone.utc)
+
+
+def _decrement_coupon_used_count(order: Order, db: Session) -> None:
+    """Espejo del increment: si una orden que contó el cupón pasa a
+    failed/canceled, devuelve el uso. Sin esto un cupón max_uses=1 quedaba
+    'agotado' para siempre tras cancelar la única orden que lo usó."""
+    if not order.coupon_code or order.coupon_counted_at is None:
+        return
+    from ..models import DiscountCode
+
+    coupon = db.query(DiscountCode).filter(DiscountCode.code == order.coupon_code).first()
+    if coupon and (coupon.used_count or 0) > 0:
+        coupon.used_count -= 1
+    order.coupon_counted_at = None
 
 
 def _append_admin_note(order: Order, note: str) -> None:
