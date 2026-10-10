@@ -247,3 +247,39 @@ def test_stale_cron_cancels_recovers_and_skips_bank_transfer(client, db, seed, o
     assert db.get(Order, abandoned["id"]).status == "canceled"      # sin pago iniciado → expira
     assert db.get(Order, transfer["id"]).status == "pending"        # transferencia → se respeta
     assert db.get(Order, mp_paid["id"]).status == "paid"            # webhook perdido → recuperada
+
+
+# --- Punto Blue Express: sin dirección particular ---
+
+
+POINT_SHIPPING = {
+    "shipping_method": "rm",
+    "shipping_mode": "punto",
+    "shipping_region": "Región Metropolitana",
+    "shipping_comuna": "Paine",
+}
+
+
+def test_point_order_drops_home_address(client, db, seed, order_payload):
+    """Tarifa 'punto' nunca guarda dirección particular aunque el cliente la mande."""
+    order = _create_order(
+        client, order_payload, **POINT_SHIPPING,
+        shipping_address="Av. Siempre Viva 742", shipping_notes="Copec Paine centro",
+    )
+    assert order["shipping_mode"] == "punto"
+    assert order["shipping_address"] is None
+    assert order["shipping_notes"] == "Copec Paine centro"
+    assert db.get(Order, order["id"]).shipping_address is None
+
+
+def test_point_order_requires_point_reference(client, seed, order_payload):
+    res = client.post("/api/orders", json={**order_payload, **POINT_SHIPPING, "shipping_notes": "  "})
+    assert res.status_code == 422
+    assert "punto Blue Express" in res.json()["detail"]
+
+
+def test_home_delivery_still_requires_address(client, seed, order_payload):
+    res = client.post("/api/orders", json={
+        **order_payload, **POINT_SHIPPING, "shipping_mode": "domicilio",
+    })
+    assert res.status_code == 422

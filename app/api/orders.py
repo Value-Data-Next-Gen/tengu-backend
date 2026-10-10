@@ -53,7 +53,20 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
     # Anti-spam por email: 3 órdenes/hora. Bots y formularios de prueba
     # repiten email; corta antes de inflar la DB con basura.
     orders_per_email_limiter.check(payload.customer_email.lower().strip())
-    if payload.shipping_method != ShippingMethod.pickup.value:
+    is_pickup = payload.shipping_method == ShippingMethod.pickup.value
+    is_point = not is_pickup and payload.shipping_mode == "punto"
+    if is_point:
+        # Tarifa 'punto' es más barata que domicilio: no se acepta dirección
+        # particular, solo región/comuna + referencia del punto de retiro.
+        if not payload.shipping_region or not payload.shipping_comuna:
+            raise HTTPException(status_code=422, detail="Falta región o comuna del punto Blue Express.")
+        if not (payload.shipping_notes or "").strip():
+            raise HTTPException(
+                status_code=422,
+                detail="Indica el punto Blue Express donde vas a retirar.",
+            )
+        payload.shipping_address = None
+    elif not is_pickup:
         if not payload.shipping_address or not payload.shipping_comuna:
             raise HTTPException(status_code=422, detail="Falta dirección o comuna para el despacho.")
 
@@ -147,7 +160,6 @@ def create_order(payload: OrderIn, request: Request, db: Session = Depends(get_d
 
     customer = _upsert_customer(db, payload)
 
-    is_pickup = payload.shipping_method == ShippingMethod.pickup.value
     order = Order(
         customer_id=customer.id,
         client_ip=client_ip(request)[:64],

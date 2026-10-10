@@ -67,7 +67,10 @@ def _shipping_summary(order: Order) -> str:
     if order.shipping_method == "pickup":
         return "Retiro en tienda (te avisamos cuándo está listo)."
     parts = [order.shipping_address or "", order.shipping_comuna or "", order.shipping_region or ""]
-    return ", ".join(p for p in parts if p)
+    summary = ", ".join(p for p in parts if p)
+    if order.shipping_mode == "punto":
+        return f"Retiro en Punto Blue Express — {order.shipping_notes or ''} ({summary})"
+    return summary
 
 
 def send_order_created_email(order: Order) -> bool:

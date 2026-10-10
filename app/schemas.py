@@ -206,6 +206,7 @@ class OrderOut(BaseModel):
     customer_phone: str
     customer_rut: str
     shipping_method: str
+    shipping_mode: str | None = None
     shipping_address: str | None
     shipping_comuna: str | None
     shipping_region: str | None
